@@ -3,6 +3,7 @@ using DSRemapper.DSRMath;
 using DSRemapper.SixAxis;
 using DSRemapper.Types;
 using FireLibs.IO.HID;
+using FireLibs.Logging;
 using System.Collections.Specialized;
 using System.IO.Hashing;
 using System.Runtime.InteropServices;
@@ -107,7 +108,7 @@ namespace DSRemapper.DualShock
         public short AccelZ = 0;
 
         [FieldOffset(30)]
-        private byte misc = 0;
+        public byte misc = 0;
 
         [FieldOffset(35)]
         private BitVector32 touchf1 = new();
@@ -128,15 +129,15 @@ namespace DSRemapper.DualShock
         public bool R1 => buttons[masks[6]] != 0;
         public bool L2 => buttons[masks[7]] != 0;
         public bool R2 => buttons[masks[8]] != 0;
-        public bool Options => buttons[masks[9]] != 0;
-        public bool Share => buttons[masks[10]] != 0;
+        public bool Share => buttons[masks[9]] != 0;
+        public bool Options => buttons[masks[10]] != 0;
         public bool L3 => buttons[masks[11]] != 0;
         public bool R3 => buttons[masks[12]] != 0;
         public bool PS => buttons[masks[13]] != 0;
         public bool TPad => buttons[masks[14]] != 0;
 
         public byte Baterry => (byte)(misc & 0x0F);
-        public bool USB => (misc & (1 << 4)) != 0;
+        public bool USB => (misc & 0x10) != 0;
 
         public byte TF1Id => (byte)touchf1[touchId];
         public bool TF1Press => touchf1[touchPress] == 0;
@@ -176,6 +177,7 @@ namespace DSRemapper.DualShock
     /// <param name="info">A DualShockInfo class with the physical controller info</param>
     public class DualShock(DualShockInfo info) : IDSRInputController
     {
+        private static readonly DSRLogger logger = DSRLogger.GetLogger("DSRemapper.Dualshock");
         private readonly HidDevice hidDevice = new((HidInfo)info);
 
         private DSRVector3 lastGyro = new();
@@ -211,6 +213,12 @@ namespace DSRemapper.DualShock
             hidDevice.OpenDevice(false);
             if (IsConnected)
             {
+                /* This didn't work for now*/
+                hidDevice.SetInputBufferCount(3);
+
+                hidDevice.GetInputBufferCount(out int bufCount);
+                logger.LogInformation($"{Name} [{Id}]: buffer count set to {bufCount}");
+
                 rawReport = new byte[hidDevice.Capabilities.InputReportByteLength];
                 GetFeatureReport();
             }
