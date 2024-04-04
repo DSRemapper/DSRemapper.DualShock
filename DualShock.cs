@@ -171,14 +171,21 @@ namespace DSRemapper.DualShock
         public IDSRInputDeviceInfo[] ScanDevices() => HidEnumerator
             .WmiEnumerateDevices(0x054C).Select(i => (DualShockInfo)i).ToArray();
     }
+
+    internal enum DualShockConnection : byte
+    {
+        USB,
+        Bluetooth,
+        Dongle,
+    }
+
     /// <summary>
     /// DualShock controller class
     /// </summary>
-    /// <param name="info">A DualShockInfo class with the physical controller info</param>
-    public class DualShock(DualShockInfo info) : IDSRInputController
+    public class DualShock : IDSRInputController
     {
         private static readonly DSRLogger logger = DSRLogger.GetLogger("DSRemapper.Dualshock");
-        private readonly HidDevice hidDevice = new((HidInfo)info);
+        private readonly HidDevice hidDevice;
 
         private DSRVector3 lastGyro = new();
         private readonly SixAxisProcess motPro = new();
@@ -189,9 +196,26 @@ namespace DSRemapper.DualShock
         private byte[] rawReport = [], crc = [];
         private readonly IDSRInputReport report = new DefaultDSRInputReport(6,0,14,1,2,4,2);
         private List<byte> sendReport = [];
+        private readonly DualShockConnection conType;
 
-        // /// <inheritdoc/>
-        //public static string ImgPath { get => "DS4.png"; }
+        ///<summary>
+        /// DualShock controller class constructor
+        /// </summary>
+        /// <param name="info">A DualShockInfo class with the physical controller info</param>
+        public DualShock(DualShockInfo info)
+        {
+            hidDevice = new((HidInfo)info);
+
+            if (hidDevice.Capabilities.InputReportByteLength == 64)
+                if (hidDevice.Capabilities.NumberFeatureDataIndices == 22)
+                    conType = DualShockConnection.Dongle;
+                else
+                    conType = DualShockConnection.USB;
+            else
+                conType = DualShockConnection.Bluetooth;
+
+            logger.LogInformation($"{Name} [{Id}]: Connected using {conType}");
+        }
         /// <inheritdoc/>
         public string Id => hidDevice.Information.Id;
 
@@ -200,6 +224,9 @@ namespace DSRemapper.DualShock
 
         /// <inheritdoc/>
         public string Type => "DS";
+
+        /// <inheritdoc/>
+        public string Info { get; private set; } = "Test";
 
         /// <inheritdoc/>
         public bool IsConnected => hidDevice.IsOpen;
@@ -213,9 +240,10 @@ namespace DSRemapper.DualShock
             hidDevice.OpenDevice(false);
             if (IsConnected)
             {
-                /* This didn't work for now*/
                 hidDevice.SetInputBufferCount(3);
 
+                // Log the current report buffer count to ensure that no errors has been occurred.
+                // If report buffer count is bigger than 3 can cause input lag
                 hidDevice.GetInputBufferCount(out int bufCount);
                 logger.LogInformation($"{Name} [{Id}]: buffer count set to {bufCount}");
 
@@ -362,6 +390,8 @@ namespace DSRemapper.DualShock
             report.Touch[1].Pos.X = strRawReport.TF2PosX;
             report.Touch[1].Pos.Y = strRawReport.TF2PosY;
             report.Touch[1].Pos /= report.TouchPadSize;
+
+            Info = $"{conType} - Battery: {report.Battery * 100,3:###}%{(report.Charging ? " Charging" : "")}";
 
             return report;
         }
