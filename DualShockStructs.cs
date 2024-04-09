@@ -118,6 +118,62 @@ namespace DSRemapper.DualShock
 		public StateData StateData => stateData;
 	}
 
+    [StructLayout(LayoutKind.Explicit, Size = 9)]
+    internal struct SimpleInStateData
+	{
+		[FieldOffset(0)]
+		private byte lx;
+        [FieldOffset(1)]
+        private byte ly;
+        [FieldOffset(2)]
+        private byte rx;
+        [FieldOffset(3)]
+        private byte ry;
+        [FieldOffset(4)]
+        private BitVector32 buttons;
+        [FieldOffset(7)]
+        private byte lTrigger = 0;
+        [FieldOffset(8)]
+        private byte tTrigger = 0;
+
+        private static readonly BitVector32.Section[] buttonMasks = new BitVector32.Section[16];
+
+		public sbyte LX { get => (sbyte)(lx - 128); set => lx = (byte)(value + 128); }
+
+        public byte DPad { get => (byte)buttons[buttonMasks[0]]; set => buttons[buttonMasks[0]]=value; }
+        public bool Square { get => buttons[buttonMasks[1]] != 0; set => buttons[buttonMasks[1]]=value?1:0; }
+        public bool Cross { get => buttons[buttonMasks[2]] != 0; set => buttons[buttonMasks[2]] = value ? 1 : 0; }
+        public bool Circle { get => buttons[buttonMasks[3]] != 0; set => buttons[buttonMasks[3]] = value ? 1 : 0; }
+        public bool Triangle { get => buttons[buttonMasks[4]] != 0; set => buttons[buttonMasks[4]] = value ? 1 : 0; }
+        public bool L1 { get => buttons[buttonMasks[5]] != 0; set => buttons[buttonMasks[5]] = value ? 1 : 0; }
+        public bool R1 { get => buttons[buttonMasks[6]] != 0; set => buttons[buttonMasks[6]] = value ? 1 : 0; }
+        public bool L2 { get => buttons[buttonMasks[7]] != 0; set => buttons[buttonMasks[7]] = value ? 1 : 0; }
+        public bool R2 { get => buttons[buttonMasks[8]] != 0; set => buttons[buttonMasks[8]] = value ? 1 : 0; }
+        public bool Options { get => buttons[buttonMasks[9]] != 0; set => buttons[buttonMasks[9]] = value ? 1 : 0; }
+        public bool Share { get => buttons[buttonMasks[10]] != 0; set => buttons[buttonMasks[10]] = value ? 1 : 0; }
+        public bool L3 { get => buttons[buttonMasks[11]] != 0; set => buttons[buttonMasks[11]] = value ? 1 : 0; }
+        public bool R3 { get => buttons[buttonMasks[12]] != 0; set => buttons[buttonMasks[12]] = value ? 1 : 0; }
+        public bool PS { get => buttons[buttonMasks[13]] != 0; set => buttons[buttonMasks[13]] = value ? 1 : 0; }
+        public bool TPad { get => buttons[buttonMasks[14]] != 0; set => buttons[buttonMasks[14]] = value ? 1 : 0; }
+        public byte Counter { get => (byte)buttons[buttonMasks[15]]; set => buttons[buttonMasks[15]] = value; }
+
+        static SimpleInStateData()
+        {
+            buttonMasks[0] = BitVector32.CreateSection(0x0f);
+            for (int i = 1; i < buttonMasks.Length-1; i++)
+            {
+                buttonMasks[i] = BitVector32.CreateSection(0x01, buttonMasks[i - 1]);
+            }
+            buttonMasks[15] = BitVector32.CreateSection(0x3F, buttonMasks[14]);
+        }
+		public SimpleInStateData() { }
+    }
+
+	internal struct InStateData
+	{
+
+	}
+
     internal struct FeedbackData
 	{
 
