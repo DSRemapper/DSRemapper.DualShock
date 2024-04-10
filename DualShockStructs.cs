@@ -134,11 +134,16 @@ namespace DSRemapper.DualShock
         [FieldOffset(7)]
         private byte lTrigger = 0;
         [FieldOffset(8)]
-        private byte tTrigger = 0;
+        private byte rTrigger = 0;
 
         private static readonly BitVector32.Section[] buttonMasks = new BitVector32.Section[16];
 
-		public sbyte LX { get => (sbyte)(lx - 128); set => lx = (byte)(value + 128); }
+		public sbyte LX { get => lx.ToSByteAxis(); set => lx = value.ToByteAxis(); }
+        public sbyte LY { get => ly.ToSByteAxis(); set => ly = value.ToByteAxis(); }
+        public sbyte RX { get => rx.ToSByteAxis(); set => rx = value.ToByteAxis(); }
+        public sbyte RY { get => ry.ToSByteAxis(); set => ry = value.ToByteAxis(); }
+        public byte LTrigger { get => lTrigger; set => lTrigger = value; }
+        public byte RTrigger { get => rTrigger; set => rTrigger = value; }
 
         public byte DPad { get => (byte)buttons[buttonMasks[0]]; set => buttons[buttonMasks[0]]=value; }
         public bool Square { get => buttons[buttonMasks[1]] != 0; set => buttons[buttonMasks[1]]=value?1:0; }
@@ -169,10 +174,13 @@ namespace DSRemapper.DualShock
 		public SimpleInStateData() { }
     }
 
-	internal struct InStateData
+    [StructLayout(LayoutKind.Explicit, Size = 9)]
+    internal struct InStateData
 	{
+		[FieldOffset(0)]
+		public SimpleInStateData simpleData;
 
-	}
+    }
 
     internal struct FeedbackData
 	{
