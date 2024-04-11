@@ -119,7 +119,7 @@ namespace DSRemapper.DualShock
 	}
 
     [StructLayout(LayoutKind.Explicit, Size = 9)]
-    internal struct SimpleInStateData
+    internal struct BasicInStateData
 	{
 		[FieldOffset(0)]
 		private byte lx;
@@ -162,7 +162,7 @@ namespace DSRemapper.DualShock
         public bool TPad { get => buttons[buttonMasks[14]] != 0; set => buttons[buttonMasks[14]] = value ? 1 : 0; }
         public byte Counter { get => (byte)buttons[buttonMasks[15]]; set => buttons[buttonMasks[15]] = value; }
 
-        static SimpleInStateData()
+        static BasicInStateData()
         {
             buttonMasks[0] = BitVector32.CreateSection(0x0f);
             for (int i = 1; i < buttonMasks.Length-1; i++)
@@ -171,14 +171,39 @@ namespace DSRemapper.DualShock
             }
             buttonMasks[15] = BitVector32.CreateSection(0x3F, buttonMasks[14]);
         }
-		public SimpleInStateData() { }
+		public BasicInStateData() { }
     }
 
-    [StructLayout(LayoutKind.Explicit, Size = 9)]
-    internal struct InStateData
+    [StructLayout(LayoutKind.Explicit, Size = 33)]
+    internal struct ExtendedInStateData
 	{
-		[FieldOffset(0)]
-		public SimpleInStateData simpleData;
+		[FieldOffset(9)]
+		ushort timestamp;
+		[FieldOffset(11)]
+		byte temperature;
+		[FieldOffset(12)]
+		short angularVelocityX;
+        [FieldOffset(14)]
+        short angularVelocityY;
+        [FieldOffset(16)]
+        short angularVelocityZ;
+        [FieldOffset(18)]
+        short accelerometerX;
+        [FieldOffset(20)]
+        short accelerometerY;
+        [FieldOffset(22)]
+        short accelerometerZ;
+		[FieldOffset(24)]
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 5)]
+        byte[] extData;
+		[FieldOffset(29)]
+		byte misc;
+        [FieldOffset(30)]
+        byte unk1;
+		[FieldOffset(31)]
+		byte unk2;
+		[FieldOffset(32)]
+		byte touchCount;
 
     }
 
