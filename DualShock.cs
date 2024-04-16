@@ -318,7 +318,7 @@ namespace DSRemapper.DualShock
                 };
             }
         }
-        /// <inheritdoc/>
+        /*/// <inheritdoc/>
         public IDSRInputReport GetInputReport()
         {
             hidDevice.ReadFile(rawReport);
@@ -389,6 +389,82 @@ namespace DSRemapper.DualShock
             report.Touch[1].Id = strRawReport.TF2Id;
             report.Touch[1].Pos.X = strRawReport.TF2PosX;
             report.Touch[1].Pos.Y = strRawReport.TF2PosY;
+            report.Touch[1].Pos /= report.TouchPadSize;
+
+            Info = $"{conType} - Battery: {report.Battery * 100,3:###}%{(report.Charging ? " Charging" : "")}";
+
+            return report;
+        }*/
+        public IDSRInputReport GetInputReport()
+        {
+            hidDevice.ReadFile(rawReport);
+            GCHandle ptr = GCHandle.Alloc(rawReport, GCHandleType.Pinned);
+            BTStatus strRawReport = Marshal.PtrToStructure<BTStatus>(ptr.AddrOfPinnedObject());//new IntPtr(ptr.AddrOfPinnedObject().ToInt64() + offset)
+            ptr.Free();
+
+            report.LX = AxisToFloat(strRawReport.Basic.LX);
+            report.LY = AxisToFloat(strRawReport.Basic.LY);
+            report.RX = AxisToFloat(strRawReport.Basic.RX);
+            report.RY = AxisToFloat(strRawReport.Basic.RY);
+
+            report.Povs[0].SetDSPov(strRawReport.Basic.DPad);
+
+            report.Square = strRawReport.Basic.Square;
+            report.Cross = strRawReport.Basic.Cross;
+            report.Circle = strRawReport.Basic.Circle;
+            report.Triangle = strRawReport.Basic.Triangle;
+
+            report.L1 = strRawReport.Basic.L1;
+            report.R1 = strRawReport.Basic.R1;
+            report.L2 = strRawReport.Basic.L2;
+            report.R2 = strRawReport.Basic.R2;
+            report.Share = strRawReport.Basic.Share;
+            report.Options = strRawReport.Basic.Options;
+            report.L3 = strRawReport.Basic.L3;
+            report.R3 = strRawReport.Basic.R3;
+
+            report.PS = strRawReport.Basic.PS;
+            report.TouchPad = strRawReport.Basic.TPad;
+
+            report.LTrigger = AxisToFloat(strRawReport.Basic.LTrigger);
+            report.RTrigger = AxisToFloat(strRawReport.Basic.RTrigger);
+            report.Battery = Math.Clamp(strRawReport.Extended.Battery / 10f, 0f, 1f);
+            report.Charging = strRawReport.Extended.USB;
+
+            report.SixAxes[1].X = -strRawReport.Extended.AngularVelocityX * (2000f / 32767f);
+            report.SixAxes[1].Y = -strRawReport.Extended.AngularVelocityY * (2000f / 32767f);
+            report.SixAxes[1].Z = strRawReport.Extended.AngularVelocityZ * (2000f / 32767f);
+            report.SixAxes[0].X = -strRawReport.Extended.AccelerometerX / 8192f;
+            report.SixAxes[0].Y = -strRawReport.Extended.AccelerometerY / 8192f;
+            report.SixAxes[0].Z = strRawReport.Extended.AccelerometerZ / 8192f;
+
+            DSRVector3 temp = (report.Gyro - lastGyro);
+            if (temp.Length < 1f)
+                gyroAvg.Update(report.Gyro, 200);
+            lastGyro = report.Gyro;
+
+            report.Gyro -= gyroAvg.Average;
+
+            motPro.Update(report.RawAccel, report.Gyro);
+
+            report.Grav = -motPro.Grav;
+            report.Accel = motPro.Accel;
+            report.Rotation = motPro.rotation;
+            report.DeltaRotation = motPro.deltaRotation;
+            report.DeltaTime = motPro.DeltaTime;
+
+            report.TouchPadSize = new(1920, 943);
+
+            report.Touch[0].Pressed = strRawReport.Touch.Fingers[0].FingerTouch;
+            report.Touch[0].Id = strRawReport.Touch.Fingers[0].FingerId;
+            report.Touch[0].Pos.X = strRawReport.Touch.Fingers[0].FingerX;
+            report.Touch[0].Pos.Y = strRawReport.Touch.Fingers[0].FingerY;
+            report.Touch[0].Pos /= report.TouchPadSize;
+
+            report.Touch[1].Pressed = strRawReport.Touch.Fingers[1].FingerTouch;
+            report.Touch[1].Id = strRawReport.Touch.Fingers[1].FingerId;
+            report.Touch[1].Pos.X = strRawReport.Touch.Fingers[1].FingerX;
+            report.Touch[1].Pos.Y = strRawReport.Touch.Fingers[1].FingerY;
             report.Touch[1].Pos /= report.TouchPadSize;
 
             Info = $"{conType} - Battery: {report.Battery * 100,3:###}%{(report.Charging ? " Charging" : "")}";

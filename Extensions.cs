@@ -9,7 +9,7 @@ namespace DSRemapper.DualShock
 {
     internal static class Extensions
     {
-        public static sbyte ToSByteAxis(this byte b) => (sbyte)(b - 128);
-        public static byte ToByteAxis(this sbyte b) => (byte)(b + 128);
+        public static sbyte AxisConvertion(this byte b) => (sbyte)(b ^ 0x80);
+        public static byte AxisConvertion(this sbyte b) => (byte)AxisConvertion((byte)b);
     }
 }

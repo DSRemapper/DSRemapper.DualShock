@@ -1,214 +1,253 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.Specialized;
-using System.Linq;
+﻿using System.Collections.Specialized;
+using System.Numerics;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace DSRemapper.DualShock
 {
-	internal interface IDualShockInputReport
-	{
-		public StateData StateData { get; }
-	}
-	[StructLayout(LayoutKind.Explicit, Size = 64)]
-    internal struct StateData
-	{
-		[FieldOffset(0)]
-		public byte id = 0;
-		[FieldOffset(1)]
-		public byte LX = 0;
-		[FieldOffset(2)]
-		public byte LY = 0;
-		[FieldOffset(3)]
-		public byte RX = 0;
-		[FieldOffset(4)]
-		public byte RY = 0;
-
-		[FieldOffset(5)]
-		private BitVector32 buttons = new();
-		private static readonly BitVector32.Section[] masks = new BitVector32.Section[15];
-
-		[FieldOffset(8)]
-		public byte LT = 0;
-		[FieldOffset(9)]
-		public byte RT = 0;
-
-		[FieldOffset(13)]
-		public short GyroX = 0;
-		[FieldOffset(15)]
-		public short GyroY = 0;
-		[FieldOffset(17)]
-		public short GyroZ = 0;
-
-		[FieldOffset(19)]
-		public short AccelX = 0;
-		[FieldOffset(21)]
-		public short AccelY = 0;
-		[FieldOffset(23)]
-		public short AccelZ = 0;
-
-		[FieldOffset(30)]
-		private byte misc = 0;
-
-		[FieldOffset(35)]
-		private BitVector32 touchf1 = new();
-		[FieldOffset(39)]
-		private BitVector32 touchf2 = new();
-
-		private static readonly BitVector32.Section touchId = BitVector32.CreateSection(0x7F);
-		private static readonly BitVector32.Section touchPress = BitVector32.CreateSection(0x01, touchId);
-		private static readonly BitVector32.Section touchPosX = BitVector32.CreateSection(0xFFF, touchPress);
-		private static readonly BitVector32.Section touchPosY = BitVector32.CreateSection(0xFFF, touchPosX);
-
-		public byte DPad => (byte)buttons[masks[0]];
-		public bool Square => buttons[masks[1]] != 0;
-		public bool Cross => buttons[masks[2]] != 0;
-		public bool Circle => buttons[masks[3]] != 0;
-		public bool Triangle => buttons[masks[4]] != 0;
-		public bool L1 => buttons[masks[5]] != 0;
-		public bool R1 => buttons[masks[6]] != 0;
-		public bool L2 => buttons[masks[7]] != 0;
-		public bool R2 => buttons[masks[8]] != 0;
-		public bool Options => buttons[masks[9]] != 0;
-		public bool Share => buttons[masks[10]] != 0;
-		public bool L3 => buttons[masks[11]] != 0;
-		public bool R3 => buttons[masks[12]] != 0;
-		public bool PS => buttons[masks[13]] != 0;
-		public bool TPad => buttons[masks[14]] != 0;
-
-		public byte Baterry => (byte)(misc & 0x0F);
-		public bool USB => (misc & (1 << 4)) != 0;
-
-		public byte TF1Id => (byte)touchf1[touchId];
-		public bool TF1Press => touchf1[touchPress] == 0;
-		public short TF1PosX => (short)touchf1[touchPosX];
-		public short TF1PosY => (short)touchf1[touchPosY];
-		public byte TF2Id => (byte)touchf2[touchId];
-		public bool TF2Press => touchf2[touchPress] == 0;
-		public short TF2PosX => (short)touchf2[touchPosX];
-		public short TF2PosY => (short)touchf2[touchPosY];
-
-		static StateData()
-		{
-			masks[0] = BitVector32.CreateSection(0x0f);
-			for (int i = 1; i < masks.Length; i++)
-			{
-				masks[i] = BitVector32.CreateSection(0x01, masks[i - 1]);
-			}
-		}
-
-		public StateData() { }
-    }
-    [StructLayout(LayoutKind.Explicit,Size = 64)]
-    internal struct DSUSBInputReport : IDualShockInputReport
+    #region Input
+    [StructLayout(LayoutKind.Sequential, Pack = 1, Size = 64)]
+    public struct USBStatus
     {
-        [FieldOffset(0)]
-        StateData stateData;
+        public byte reportId=0;
+        public BasicInState basicState = new();
+        public ExtendedInState extendedState = new();
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 3)]
+        public TouchStatus[] touchStatus=new TouchStatus[3];
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 3)]
+        public byte[] padding = new byte[3];
 
-        public StateData StateData => stateData;
+        public byte ReportId { get => reportId; set => reportId = value; }
+        public BasicInState Basic { get => basicState; set => basicState = value; }
+        public ExtendedInState Extended { get => extendedState; set => extendedState = value; }
+        public TouchStatus Touch { get => touchStatus[0]; set => touchStatus[0] = value;}
+        public TouchStatus[] Touches { get => touchStatus; set => touchStatus = value; }
+        public USBStatus() { }
     }
-	[StructLayout(LayoutKind.Explicit, Size = 64)]
-    internal struct DSBTInputReport : IDualShockInputReport
-	{
-		[FieldOffset(2)]
-		StateData stateData;
+    [StructLayout(LayoutKind.Sequential,Pack =1, Size = 78)]
+    public struct BTStatus
+    {
+        public byte reportId=0;
+        private BitVector<byte> misc1 = new();
+        private BitVector<byte> misc2 = new();
+        public BasicInState basicState = new();
+        public ExtendedInState extendedState = new();
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)]
+        public TouchStatus[] touchStatus = new TouchStatus[4];
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 2)]
+        public byte[] padding=new byte[2];
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 4)]
+        public byte[] crc=new byte[4];
 
-		public StateData StateData => stateData;
-	}
+        public byte ReportId { get => reportId; set => reportId = value; }
+        public byte PollingRate { get => misc1[0x3F,0]; set => misc1[0x3F, 0] = value; }
+        public bool EnableCRC { get => misc1[0x40]; set => misc1[0x40] = value; }
+        public bool EnableHID { get => misc1[0x80]; set => misc1[0x80] = value; }
+        public byte EnableMic { get => misc2[0x07, 0]; set => misc2[0x07, 0] = value; }
+        public byte Unk { get => misc2[0x0F, 3]; set => misc2[0x0F, 3] = value; }
+        public bool EnableAudio { get => misc2[0x80]; set => misc2[0x80] = value; }
+        public BasicInState Basic { get => basicState; set => basicState = value; }
+        public ExtendedInState Extended { get => extendedState; set => extendedState = value; }
+        public TouchStatus Touch { get => touchStatus[0]; set => touchStatus[0] = value; }
+        public TouchStatus[] Touches { get => touchStatus; set => touchStatus = value; }
+        public byte[] CRC { get => crc; set => crc = value; }
 
-    [StructLayout(LayoutKind.Explicit, Size = 9)]
-    internal struct BasicInStateData
+        public BTStatus() { }
+    }
+
+    [StructLayout(LayoutKind.Sequential,Pack = 1, Size = 9)]
+    public struct BasicInState
 	{
-		[FieldOffset(0)]
-		private byte lx;
-        [FieldOffset(1)]
-        private byte ly;
-        [FieldOffset(2)]
-        private byte rx;
-        [FieldOffset(3)]
-        private byte ry;
-        [FieldOffset(4)]
-        private BitVector32 buttons;
-        [FieldOffset(7)]
-        private byte lTrigger = 0;
-        [FieldOffset(8)]
+		private byte lx=0;
+        private byte ly=0;
+        private byte rx = 0;
+        private byte ry = 0;
+        private BitVector<ushort> buttons = new();
+        private BitVector<byte> misc = new();
+        private byte lTrigger=0;
         private byte rTrigger = 0;
 
-        private static readonly BitVector32.Section[] buttonMasks = new BitVector32.Section[16];
-
-		public sbyte LX { get => lx.ToSByteAxis(); set => lx = value.ToByteAxis(); }
-        public sbyte LY { get => ly.ToSByteAxis(); set => ly = value.ToByteAxis(); }
-        public sbyte RX { get => rx.ToSByteAxis(); set => rx = value.ToByteAxis(); }
-        public sbyte RY { get => ry.ToSByteAxis(); set => ry = value.ToByteAxis(); }
+		public sbyte LX { get => lx.AxisConvertion(); set => lx = value.AxisConvertion(); }
+        public sbyte LY { get => ly.AxisConvertion(); set => ly = value.AxisConvertion(); }
+        public sbyte RX { get => rx.AxisConvertion(); set => rx = value.AxisConvertion(); }
+        public sbyte RY { get => ry.AxisConvertion(); set => ry = value.AxisConvertion(); }
         public byte LTrigger { get => lTrigger; set => lTrigger = value; }
         public byte RTrigger { get => rTrigger; set => rTrigger = value; }
 
-        public byte DPad { get => (byte)buttons[buttonMasks[0]]; set => buttons[buttonMasks[0]]=value; }
-        public bool Square { get => buttons[buttonMasks[1]] != 0; set => buttons[buttonMasks[1]]=value?1:0; }
-        public bool Cross { get => buttons[buttonMasks[2]] != 0; set => buttons[buttonMasks[2]] = value ? 1 : 0; }
-        public bool Circle { get => buttons[buttonMasks[3]] != 0; set => buttons[buttonMasks[3]] = value ? 1 : 0; }
-        public bool Triangle { get => buttons[buttonMasks[4]] != 0; set => buttons[buttonMasks[4]] = value ? 1 : 0; }
-        public bool L1 { get => buttons[buttonMasks[5]] != 0; set => buttons[buttonMasks[5]] = value ? 1 : 0; }
-        public bool R1 { get => buttons[buttonMasks[6]] != 0; set => buttons[buttonMasks[6]] = value ? 1 : 0; }
-        public bool L2 { get => buttons[buttonMasks[7]] != 0; set => buttons[buttonMasks[7]] = value ? 1 : 0; }
-        public bool R2 { get => buttons[buttonMasks[8]] != 0; set => buttons[buttonMasks[8]] = value ? 1 : 0; }
-        public bool Options { get => buttons[buttonMasks[9]] != 0; set => buttons[buttonMasks[9]] = value ? 1 : 0; }
-        public bool Share { get => buttons[buttonMasks[10]] != 0; set => buttons[buttonMasks[10]] = value ? 1 : 0; }
-        public bool L3 { get => buttons[buttonMasks[11]] != 0; set => buttons[buttonMasks[11]] = value ? 1 : 0; }
-        public bool R3 { get => buttons[buttonMasks[12]] != 0; set => buttons[buttonMasks[12]] = value ? 1 : 0; }
-        public bool PS { get => buttons[buttonMasks[13]] != 0; set => buttons[buttonMasks[13]] = value ? 1 : 0; }
-        public bool TPad { get => buttons[buttonMasks[14]] != 0; set => buttons[buttonMasks[14]] = value ? 1 : 0; }
-        public byte Counter { get => (byte)buttons[buttonMasks[15]]; set => buttons[buttonMasks[15]] = value; }
-
-        static BasicInStateData()
-        {
-            buttonMasks[0] = BitVector32.CreateSection(0x0f);
-            for (int i = 1; i < buttonMasks.Length-1; i++)
-            {
-                buttonMasks[i] = BitVector32.CreateSection(0x01, buttonMasks[i - 1]);
-            }
-            buttonMasks[15] = BitVector32.CreateSection(0x3F, buttonMasks[14]);
-        }
-		public BasicInStateData() { }
+        public byte DPad { get => (byte)buttons[0x000F, 0]; set => buttons[0x000F, 0] = value; }
+        public bool Square { get => buttons[0x0010]; set => buttons[0x0010]=value; }
+        public bool Cross { get => buttons[0x0020]; set => buttons[0x0020] = value; }
+        public bool Circle { get => buttons[0x0040]; set => buttons[0x0040] = value; }
+        public bool Triangle { get => buttons[0x0080]; set => buttons[0x0080] = value; }
+        public bool L1 { get => buttons[0x0100]; set => buttons[0x0100] = value; }
+        public bool R1 { get => buttons[0x0200]; set => buttons[0x0200] = value; }
+        public bool L2 { get => buttons[0x0400]; set => buttons[0x0400] = value; }
+        public bool R2 { get => buttons[0x0800]; set => buttons[0x0800] = value; }
+        public bool Options { get => buttons[0x1000]; set => buttons[0x1000] = value; }
+        public bool Share { get => buttons[0x2000]; set => buttons[0x2000] = value; }
+        public bool L3 { get => buttons[0x4000]; set => buttons[0x4000] = value; }
+        public bool R3 { get => buttons[0x8000]; set => buttons[0x8000] = value; }
+        public bool PS { get => misc[0x01]; set => misc[0x01] = value; }
+        public bool TPad { get => misc[0x02]; set => misc[0x02] = value; }
+        public byte Counter { get => misc[0x3F,2]; set => misc[0x3F, 2] = value; }
+        public BasicInState() { }
     }
 
-    [StructLayout(LayoutKind.Explicit, Size = 33)]
-    internal struct ExtendedInStateData
-	{
-		[FieldOffset(9)]
-		ushort timestamp;
-		[FieldOffset(11)]
-		byte temperature;
-		[FieldOffset(12)]
-		short angularVelocityX;
-        [FieldOffset(14)]
-        short angularVelocityY;
-        [FieldOffset(16)]
-        short angularVelocityZ;
-        [FieldOffset(18)]
-        short accelerometerX;
-        [FieldOffset(20)]
-        short accelerometerY;
-        [FieldOffset(22)]
-        short accelerometerZ;
-		[FieldOffset(24)]
+    [StructLayout(LayoutKind.Sequential, Pack = 1, Size = 23)]
+    public struct ExtendedInState
+    {
+        private ushort timestamp=0;
+        private byte temperature = 0;
+        private short angularVelocityX = 0;
+        private short angularVelocityY = 0;
+        private short angularVelocityZ = 0;
+        private short accelerometerX = 0;
+        private short accelerometerY = 0;
+        private short accelerometerZ = 0;
         [MarshalAs(UnmanagedType.ByValArray, SizeConst = 5)]
-        byte[] extData;
-		[FieldOffset(29)]
-		byte misc;
-        [FieldOffset(30)]
-        byte unk1;
-		[FieldOffset(31)]
-		byte unk2;
-		[FieldOffset(32)]
-		byte touchCount;
+        private byte[] extData = new byte[5];
+        private BitVector<byte> misc = new();
+        private BitVector<ushort> unk = new();
+        private byte touchCount = 0;
+
+        public ushort Timestamp { get=> timestamp; set => timestamp = value; }
+        public byte Temperature { get=> temperature; set => temperature = value; }
+        public short AngularVelocityX { get=> angularVelocityX; set => angularVelocityX = value; }
+        public short AngularVelocityY { get=> angularVelocityY; set => angularVelocityY = value; }
+        public short AngularVelocityZ { get => angularVelocityZ; set => angularVelocityZ = value; }
+        public short AccelerometerX { get => accelerometerX; set => accelerometerX = value; }
+        public short AccelerometerY { get => accelerometerY; set => accelerometerY = value; }
+        public short AccelerometerZ { get => accelerometerZ; set => accelerometerZ = value; }
+        public byte[] ExtData { get => extData; set => extData=value; }
+        public byte Battery { get => misc[0x0F, 0]; set => misc[0x0F, 0] = value; }
+        public bool USB { get => misc[0x10]; set => misc[0x10] = value; }
+        public bool Headphone { get => misc[0x20]; set => misc[0x20] = value; }
+        public bool Mic { get => misc[0x40]; set => misc[0x40] = value; }
+        public bool Ext { get => misc[0x80]; set => misc[0x80] = value; }
+        public bool UnkExt1 { get => unk[0x0001]; set=> unk[0x0001] = value; }
+        public bool UnkExt2 { get => unk[0x0002]; set => unk[0x0002] = value; }
+        public bool NotConnected { get => unk[0x0004]; set => unk[0x0004] = value; }
+        public ushort Unk { get => unk[0x1FFF, 3]; set => unk[0x1FFF, 3] = value; }
+        public byte TouchPackCount { get => touchCount; set => touchCount = value; }
+
+        public ExtendedInState() { }
 
     }
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct FingerStatus
+    {
+        private BitVector<uint> fingerData = new();
 
-    internal struct FeedbackData
-	{
+        private static readonly BitVector<uint>.Section fingerId = BitVector<uint>.CreateSection(0x7F);
+        private static readonly BitVector<uint>.Section fingerX = BitVector<uint>.CreateSection(0xFFF, 8);
+        private static readonly BitVector<uint>.Section fingerY = BitVector<uint>.CreateSection(0xFFF, fingerX);
 
-	}
+        public byte FingerId { get => (byte)fingerData[fingerId]; set => fingerData[fingerId] = value; }
+        public bool FingerTouch { get => !fingerData[0x80]; set => fingerData[0x80] = !value; }
+        public short FingerX { get => (short)fingerData[fingerX]; set => fingerData[fingerX] = (uint)value; }
+        public short FingerY { get => (short)fingerData[fingerY]; set => fingerData[fingerY] = (uint)value; }
+        public FingerStatus() { }
+    }
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct TouchStatus
+    {
+        private byte timestamp=0;
+        [MarshalAs(UnmanagedType.ByValArray, SizeConst = 2)]
+        private FingerStatus[] fingers = new FingerStatus[2];
+
+        public byte Timestamp { get => timestamp; set => timestamp = value; }
+        public FingerStatus[] Fingers { get=>fingers; set => fingers = value; }
+        public TouchStatus() { }
+    }
+
+    #endregion Input
+
+    #region Output
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    struct SetStateData
+    {
+        BitVector<byte> misc1;
+        BitVector<byte> misc2;
+        BitVector<byte> empty1;
+        byte rumbleRight;
+        byte rumbleLeft;
+        byte red;
+        byte green;
+        byte blue;
+        byte flashOn;
+        byte flashOff;
+        [MarshalAs(UnmanagedType.ByValArray,SizeConst = 8)]
+        byte[] extData = new byte[8];
+        byte volumeLeft;
+        byte volumeRight;
+        byte volumeMic;
+        byte volumeSpeaker;
+        BitVector<byte> unkAduio;
+
+        public SetStateData()
+        {
+
+        }
+    }
+    #endregion Output
+
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct BitVector<T> where T : IBinaryInteger<T>, IUnsignedNumber<T>
+    {
+        T data;
+
+        public T Data { get { return data; } set { data = value; } }
+
+        public BitVector()
+        {
+            data = default!;
+        }
+
+        public bool this[T mask]
+        {
+            get => (dynamic)(Data & mask) == mask;
+            set => Data = value ? Data | mask : Data & ~mask;
+        }
+        public T this[T mask, byte offset]
+        {
+            get => (Data & (mask << offset)) >> offset;
+            set => Data = (Data & ~(mask << offset)) | ((value & mask) << offset);
+        }
+
+        public T this[Section section]
+        {
+            get => this[section.Mask, section.Offset];
+            set => this[section.Mask, section.Offset] = value;
+
+            /*get => (Data & section.RawMask) >> section.Offset;
+            set => Data = (Data & ~section.RawMask) | ((value << section.Offset) & section.RawMask);*/
+        }
+
+        public static Section CreateSection(T mask) => new(mask, 0);
+        public static Section CreateSection(T mask, byte offset) => new(mask, offset);
+        public static Section CreateSection(T mask, Section previous) => new(mask, previous);
+
+        public struct Section
+        {
+            T mask;
+            byte offset;
+
+            public T Mask => mask;
+            public T RawMask => mask << offset;
+            public byte Offset => offset;
+
+            public Section(T mask, byte offset)
+            {
+                this.offset = offset;
+                this.mask = (T)(dynamic)(BitOperations.RoundUpToPowerOf2((ulong)(dynamic)mask + 1) - 1);
+                if (BitOperations.PopCount((dynamic)mask) + offset > mask.GetByteCount() * 8)
+                    throw new InvalidOperationException("BitVector overflow. Mask bits and the offset exceeds mask size.");
+
+                //this.mask <<= offset;
+            }
+            public Section(T mask, Section previous) : this(mask, previous.NextSectionOffset()) { }
+
+            public byte NextSectionOffset() => (byte)(BitOperations.PopCount((dynamic)Mask) + Offset);
+        }
+    }
 }
