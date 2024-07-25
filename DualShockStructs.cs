@@ -1,13 +1,23 @@
-﻿using System.Collections.Specialized;
+﻿using DSRemapper.Core.Types;
+using System.Collections.Specialized;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 
 namespace DSRemapper.DualShock
 {
+    interface IDS4Report
+    {
+        public BasicInState Basic { get; }
+        public ExtendedInState Extended { get; }
+        public TouchStatus Touch { get; }
+        public TouchStatus[] Touches { get; }
+        public byte[] CRC { get; }
+    }
+
     #region Input
     [StructLayout(LayoutKind.Sequential, Pack = 1, Size = 64)]
-    public struct USBStatus
+    public struct USBStatus : IDS4Report
     {
         public byte reportId=0;
         public BasicInState basicState = new();
@@ -22,10 +32,11 @@ namespace DSRemapper.DualShock
         public ExtendedInState Extended { get => extendedState; set => extendedState = value; }
         public TouchStatus Touch { get => touchStatus[0]; set => touchStatus[0] = value;}
         public TouchStatus[] Touches { get => touchStatus; set => touchStatus = value; }
+        public byte[] CRC { get => []; }
         public USBStatus() { }
     }
     [StructLayout(LayoutKind.Sequential,Pack =1, Size = 78)]
-    public struct BTStatus
+    public struct BTStatus : IDS4Report
     {
         public byte reportId=0;
         private BitVector<byte> misc1 = new();
@@ -83,8 +94,8 @@ namespace DSRemapper.DualShock
         public bool R1 { get => buttons[0x0200]; set => buttons[0x0200] = value; }
         public bool L2 { get => buttons[0x0400]; set => buttons[0x0400] = value; }
         public bool R2 { get => buttons[0x0800]; set => buttons[0x0800] = value; }
-        public bool Options { get => buttons[0x1000]; set => buttons[0x1000] = value; }
-        public bool Share { get => buttons[0x2000]; set => buttons[0x2000] = value; }
+        public bool Share { get => buttons[0x1000]; set => buttons[0x1000] = value; }
+        public bool Options { get => buttons[0x2000]; set => buttons[0x2000] = value; }
         public bool L3 { get => buttons[0x4000]; set => buttons[0x4000] = value; }
         public bool R3 { get => buttons[0x8000]; set => buttons[0x8000] = value; }
         public bool PS { get => misc[0x01]; set => misc[0x01] = value; }
@@ -190,64 +201,4 @@ namespace DSRemapper.DualShock
         }
     }
     #endregion Output
-
-    [StructLayout(LayoutKind.Sequential, Pack = 1)]
-    public struct BitVector<T> where T : IBinaryInteger<T>, IUnsignedNumber<T>
-    {
-        T data;
-
-        public T Data { get { return data; } set { data = value; } }
-
-        public BitVector()
-        {
-            data = default!;
-        }
-
-        public bool this[T mask]
-        {
-            get => (dynamic)(Data & mask) == mask;
-            set => Data = value ? Data | mask : Data & ~mask;
-        }
-        public T this[T mask, byte offset]
-        {
-            get => (Data & (mask << offset)) >> offset;
-            set => Data = (Data & ~(mask << offset)) | ((value & mask) << offset);
-        }
-
-        public T this[Section section]
-        {
-            get => this[section.Mask, section.Offset];
-            set => this[section.Mask, section.Offset] = value;
-
-            /*get => (Data & section.RawMask) >> section.Offset;
-            set => Data = (Data & ~section.RawMask) | ((value << section.Offset) & section.RawMask);*/
-        }
-
-        public static Section CreateSection(T mask) => new(mask, 0);
-        public static Section CreateSection(T mask, byte offset) => new(mask, offset);
-        public static Section CreateSection(T mask, Section previous) => new(mask, previous);
-
-        public struct Section
-        {
-            T mask;
-            byte offset;
-
-            public T Mask => mask;
-            public T RawMask => mask << offset;
-            public byte Offset => offset;
-
-            public Section(T mask, byte offset)
-            {
-                this.offset = offset;
-                this.mask = (T)(dynamic)(BitOperations.RoundUpToPowerOf2((ulong)(dynamic)mask + 1) - 1);
-                if (BitOperations.PopCount((dynamic)mask) + offset > mask.GetByteCount() * 8)
-                    throw new InvalidOperationException("BitVector overflow. Mask bits and the offset exceeds mask size.");
-
-                //this.mask <<= offset;
-            }
-            public Section(T mask, Section previous) : this(mask, previous.NextSectionOffset()) { }
-
-            public byte NextSectionOffset() => (byte)(BitOperations.PopCount((dynamic)Mask) + Offset);
-        }
-    }
 }

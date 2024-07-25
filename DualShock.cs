@@ -395,11 +395,16 @@ namespace DSRemapper.DualShock
 
             return report;
         }*/
+        /// <inheritdoc/>
         public IDSRInputReport GetInputReport()
         {
             hidDevice.ReadFile(rawReport);
             GCHandle ptr = GCHandle.Alloc(rawReport, GCHandleType.Pinned);
-            BTStatus strRawReport = Marshal.PtrToStructure<BTStatus>(ptr.AddrOfPinnedObject());//new IntPtr(ptr.AddrOfPinnedObject().ToInt64() + offset)
+            IDS4Report strRawReport; //new IntPtr(ptr.AddrOfPinnedObject().ToInt64() + offset)
+            if (conType == DualShockConnection.USB)
+                strRawReport = Marshal.PtrToStructure<USBStatus>(ptr.AddrOfPinnedObject());
+            else
+                strRawReport = Marshal.PtrToStructure<BTStatus>(ptr.AddrOfPinnedObject());
             ptr.Free();
 
             report.LX = AxisToFloat(strRawReport.Basic.LX);

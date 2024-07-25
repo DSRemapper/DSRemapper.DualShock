@@ -26,7 +26,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DSRemapper.Core" Version="0.2.4-beta" />
+    <PackageReference Include="DSRemapper.Core" Version="0.2.6-beta" />
     <PackageReference Include="FireLibs.IO" Version="0.2.2-alpha" />
     <PackageReference Include="System.IO.Hashing" Version="7.0.0" />
     <PackageReference Include="System.Management" Version="7.0.2" />
