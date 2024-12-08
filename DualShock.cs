@@ -400,7 +400,7 @@ namespace DSRemapper.DualShock
         {
             hidDevice.ReadFile(rawReport);
             GCHandle ptr = GCHandle.Alloc(rawReport, GCHandleType.Pinned);
-            IDS4Report strRawReport; //new IntPtr(ptr.AddrOfPinnedObject().ToInt64() + offset)
+            IDS4InReport strRawReport; //new IntPtr(ptr.AddrOfPinnedObject().ToInt64() + offset)
             if (conType == DualShockConnection.USB)
                 strRawReport = Marshal.PtrToStructure<USBStatus>(ptr.AddrOfPinnedObject());
             else
@@ -452,7 +452,7 @@ namespace DSRemapper.DualShock
 
             motPro.Update(report.RawAccel, report.Gyro);
 
-            report.Grav = -motPro.Grav;
+            report.Grav = motPro.Grav;
             report.Accel = motPro.Accel;
             report.Rotation = motPro.rotation;
             report.DeltaRotation = motPro.deltaRotation;
