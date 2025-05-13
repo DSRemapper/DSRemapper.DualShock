@@ -104,15 +104,11 @@ namespace DSRemapper.DualShock
         private readonly SixAxisProcess motPro = new();
         private readonly ExpMovingAverageVector3 gyroAvg = new();
 
-        //private int offset = 0;
-        //private DualShockInReport strRawReport;
         private SetStateData outState = new();
         private IDS4OutReport? outReport = null;
-        private Crc32 inCRC = new();
         private Crc32 outCRC = new();
-        private byte[] rawReport = [], crc = [];
+        private byte[] rawReport = [];
         private readonly DualShockInputReport report = new();
-        private List<byte> sendReport = [];
         private readonly DualShockConnection conType;
 
         ///<summary>
@@ -163,7 +159,6 @@ namespace DSRemapper.DualShock
                 // If report buffer count is bigger than 3 can cause input lag
                 hidDevice.GetInputBufferCount(out int bufCount);
                 logger.LogInformation($"{Name} [{Id}]: buffer count set to {bufCount}");
-                //logger.LogDebug($"{Name} [{Id}]: Input Report Length {hidDevice.Capabilities.InputReportByteLength}");
 
                 rawReport = new byte[hidDevice.Capabilities.InputReportByteLength];
                 GetFeatureReport();
@@ -197,7 +192,7 @@ namespace DSRemapper.DualShock
         {
             hidDevice.ReadFile(rawReport);
             GCHandle ptr = GCHandle.Alloc(rawReport, GCHandleType.Pinned);
-            IDS4InReport strRawReport; //new IntPtr(ptr.AddrOfPinnedObject().ToInt64() + offset)
+            IDS4InReport strRawReport;
             if (conType == DualShockConnection.USB)
                 strRawReport = Marshal.PtrToStructure<USBStatus>(ptr.AddrOfPinnedObject());
             else
@@ -222,71 +217,6 @@ namespace DSRemapper.DualShock
             report.Rotation = motPro.rotation;
             report.DeltaRotation = motPro.deltaRotation;
             report.DeltaTime = motPro.DeltaTime;
-
-            /*report.LX = AxisToFloat(strRawReport.Basic.LX);
-            report.LY = AxisToFloat(strRawReport.Basic.LY);
-            report.RX = AxisToFloat(strRawReport.Basic.RX);
-            report.RY = AxisToFloat(strRawReport.Basic.RY);
-
-            report.Povs[0].SetDSPov(strRawReport.Basic.DPad);
-
-            report.Square = strRawReport.Basic.Square;
-            report.Cross = strRawReport.Basic.Cross;
-            report.Circle = strRawReport.Basic.Circle;
-            report.Triangle = strRawReport.Basic.Triangle;
-
-            report.L1 = strRawReport.Basic.L1;
-            report.R1 = strRawReport.Basic.R1;
-            report.L2 = strRawReport.Basic.L2;
-            report.R2 = strRawReport.Basic.R2;
-            report.Share = strRawReport.Basic.Share;
-            report.Options = strRawReport.Basic.Options;
-            report.L3 = strRawReport.Basic.L3;
-            report.R3 = strRawReport.Basic.R3;
-
-            report.PS = strRawReport.Basic.PS;
-            report.TouchPad = strRawReport.Basic.TPad;
-
-            report.LTrigger = AxisToFloat(strRawReport.Basic.LTrigger);
-            report.RTrigger = AxisToFloat(strRawReport.Basic.RTrigger);
-            report.Battery = Math.Clamp(strRawReport.Extended.Battery / 10f, 0f, 1f);
-            report.Charging = strRawReport.Extended.USB;
-
-            report.SixAxes[1].X = -strRawReport.Extended.AngularVelocityX * (2000f / 32767f);
-            report.SixAxes[1].Y = -strRawReport.Extended.AngularVelocityY * (2000f / 32767f);
-            report.SixAxes[1].Z = strRawReport.Extended.AngularVelocityZ * (2000f / 32767f);
-            report.SixAxes[0].X = -strRawReport.Extended.AccelerometerX / 8192f;
-            report.SixAxes[0].Y = -strRawReport.Extended.AccelerometerY / 8192f;
-            report.SixAxes[0].Z = strRawReport.Extended.AccelerometerZ / 8192f;
-
-            DSRVector3 temp = (report.Gyro - lastGyro);
-            if (temp.Length < 1f)
-                gyroAvg.Update(report.Gyro, 200);
-            lastGyro = report.Gyro;
-
-            report.Gyro -= gyroAvg.Average;
-
-            motPro.Update(report.RawAccel, report.Gyro);
-
-            report.Grav = motPro.Grav;
-            report.Accel = motPro.Accel;
-            report.Rotation = motPro.rotation;
-            report.DeltaRotation = motPro.deltaRotation;
-            report.DeltaTime = motPro.DeltaTime;
-
-            report.TouchPadSize = new(1920, 943);
-
-            report.Touch[0].Pressed = strRawReport.Touch.Fingers[0].FingerTouch;
-            report.Touch[0].Id = strRawReport.Touch.Fingers[0].FingerId;
-            report.Touch[0].Pos.X = strRawReport.Touch.Fingers[0].FingerX;
-            report.Touch[0].Pos.Y = strRawReport.Touch.Fingers[0].FingerY;
-            report.Touch[0].Pos /= report.TouchPadSize;
-
-            report.Touch[1].Pressed = strRawReport.Touch.Fingers[1].FingerTouch;
-            report.Touch[1].Id = strRawReport.Touch.Fingers[1].FingerId;
-            report.Touch[1].Pos.X = strRawReport.Touch.Fingers[1].FingerX;
-            report.Touch[1].Pos.Y = strRawReport.Touch.Fingers[1].FingerY;
-            report.Touch[1].Pos /= report.TouchPadSize;*/
 
             Info = $"{conType} - Battery: {report.Battery * 100,3:###}%{(report.Charging ? " Charging" : "")}";
 
@@ -329,51 +259,13 @@ namespace DSRemapper.DualShock
                 outCRC.Append([0xA2]);
                 outCRC.Append(outReport.ToArray()[0..74]);
 
-
                 outReport.CRC = outCRC.GetHashAndReset();
-                /*// rumble
-                sendReport[7] = (byte)(report.Weak * 255);
-                sendReport[8] = (byte)(report.Strong * 255);
-                // colour
-                sendReport[9] = (byte)(report.Red * 255);
-                sendReport[10] = (byte)(report.Green * 255);
-                sendReport[11] = (byte)(report.Blue * 255);
-                // flash time
-                sendReport[12] = (byte)(report.OnTime * 255);
-                sendReport[13] = (byte)(report.OffTime * 255);
-
-                crc = Crc32.Hash([..sendReport[0..75]]);//sendReport.GetRange(0, 75).ToArray()
-                sendReport[75] = crc[0];
-                sendReport[76] = crc[1];
-                sendReport[77] = crc[2];
-                sendReport[78] = crc[3];
-
-                hidDevice.WriteFile([.. sendReport[1..]]);//sendReport.GetRange(1, 78)*/
             }
             else
             {
                 outReport ??= new USBOutReport();
                 outReport.State = outState;
-
-                /*// rumble
-                sendReport[4] = (byte)(report.Weak * 255);
-                sendReport[5] = (byte)(report.Strong * 255);
-                // colour
-                sendReport[6] = (byte)(report.Red * 255);
-                sendReport[7] = (byte)(report.Green * 255);
-                sendReport[8] = (byte)(report.Blue * 255);
-                // flash time
-                sendReport[9] = (byte)(report.OnTime * 255);
-                sendReport[10] = (byte)(report.OffTime * 255);
-
-                hidDevice.WriteFile([.. sendReport]);*/
-                //hidDevice.WriteFile(outReport.ToArray());
             }
-            /*byte[] byteReport = new byte[hidDevice.Capabilities.OutputReportByteLength];
-            byte[] byteRep = outReport.ToArray();
-            Array.Copy(byteRep, byteReport, byteRep.Length);*/
-
-            //logger.LogDebug($"RawState: {byteReport.Length}");
             hidDevice.WriteFile(outReport.ToArray());
         }
         private static string FormatByteArray(byte[] data)
