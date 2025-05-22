@@ -3,7 +3,6 @@ using DSRemapper.DSRMath;
 using DSRemapper.SixAxis;
 using DSRemapper.Types;
 using FireLibs.IO.HID;
-using FireLibs.Logging;
 using System.Collections.Specialized;
 using System.IO.Hashing;
 using System.Runtime.InteropServices;
