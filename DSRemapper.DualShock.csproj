@@ -18,7 +18,7 @@
 	  <RepositoryType>git</RepositoryType>
 	  <PackageProjectUrl>https://github.com/Oscar-Wohlfarhrt/DSRemapper</PackageProjectUrl>
 	  <RepositoryUrl>https://github.com/Oscar-Wohlfarhrt/DSRemapper</RepositoryUrl>
-	  <AssemblyVersion>0.2.1</AssemblyVersion>
+	  <AssemblyVersion>0.3.0</AssemblyVersion>
 	  <FileVersion>$(AssemblyVersion)</FileVersion>
 	  <Version>$(AssemblyVersion)-beta</Version>
 	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
@@ -26,7 +26,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DSRemapper.Core" Version="0.3.2-beta" />
+    <PackageReference Include="DSRemapper.Core" Version="0.4.1-beta" />
     <PackageReference Include="FireLibs.IO" Version="0.2.2-alpha" />
     <PackageReference Include="System.IO.Hashing" Version="8.0.0" />
     <PackageReference Include="System.Management" Version="8.0.0" />
@@ -38,6 +38,9 @@
 
   <ItemGroup>
     <None Update="DS4.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="DS5.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
