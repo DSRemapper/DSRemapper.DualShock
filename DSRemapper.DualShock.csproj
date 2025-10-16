@@ -18,7 +18,7 @@
 	  <RepositoryType>git</RepositoryType>
 	  <PackageProjectUrl>https://github.com/Oscar-Wohlfarhrt/DSRemapper</PackageProjectUrl>
 	  <RepositoryUrl>https://github.com/Oscar-Wohlfarhrt/DSRemapper</RepositoryUrl>
-	  <AssemblyVersion>0.3.0</AssemblyVersion>
+	  <AssemblyVersion>0.3.1</AssemblyVersion>
 	  <FileVersion>$(AssemblyVersion)</FileVersion>
 	  <Version>$(AssemblyVersion)-beta</Version>
 	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
@@ -27,7 +27,7 @@
 
   <ItemGroup>
     <PackageReference Include="DSRemapper.Core" Version="0.4.1-beta" />
-    <PackageReference Include="FireLibs.IO" Version="0.2.2-alpha" />
+	<PackageReference Include="HidApi.Net" Version="1.2.0" />
     <PackageReference Include="System.IO.Hashing" Version="8.0.0" />
     <PackageReference Include="System.Management" Version="8.0.0" />
   </ItemGroup>
@@ -42,6 +42,9 @@
     </None>
     <None Update="DS5.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="hidapi.ndll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 

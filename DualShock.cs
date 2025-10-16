@@ -2,12 +2,13 @@
 using DSRemapper.DSRMath;
 using DSRemapper.SixAxis;
 using DSRemapper.Types;
-using FireLibs.IO.HID;
+using HidApi;
 using System.Collections.Specialized;
 using System.IO.Hashing;
 using System.Runtime.InteropServices;
 using System.Text;
 using DSRemapper.DualSense;
+using System.Collections.Generic;
 
 /* 
  * Some things of this class are copied from some github repositories.
@@ -29,27 +30,28 @@ namespace DSRemapper.DualShock
     /// <param name="id">Device unique id</param>
     /// <param name="vendorId">Device vendor id</param>
     /// <param name="productId">Device product id</param>
-    public class DualShockInfo(string path, string name, string id, int vendorId, int productId) : IDSRInputDeviceInfo
+    public class DualShockInfo(DeviceInfo info) : IDSRInputDeviceInfo
     {
+        internal DeviceInfo Info { get; private set; } = info;
         /// <summary>
         /// Hid Device path of the DualShock controller
         /// </summary>
-        public string Path { get; private set; } = path;
+        public string Path => Info.Path;
         /// <inheritdoc/>
-        public string Id { get; private set; } = id;
+        public string Id => Info.SerialNumber;
         /// <inheritdoc/>
-        public string Name { get; private set; } = name;
+        public string Name => Info.ProductString;
         /// <summary>
         /// Hid Device vendor id of the DualShock controller
         /// </summary>
-        public int VendorId { get; private set; } = vendorId;
+        public int VendorId => Info.VendorId;
         /// <summary>
         /// Hid Device product id of the DualShock controller
         /// </summary>
-        public int ProductId { get; private set; } = productId;
+        public int ProductId => Info.ProductId;
 
-        internal static List<int> DS4ProdId = [0x05C4, 0x09CC, 0x0BA0, 0x0BA1];
-        internal static List<int> DS5ProdId = [0x0CE6, 0x0DF2];
+        internal static readonly List<int> DS4ProdId = [0x05C4, 0x09CC, 0x0BA0, 0x0BA1];
+        internal static readonly List<int> DS5ProdId = [0x0CE6, 0x0DF2];
 
         /// <inheritdoc/>
         public IDSRInputController CreateController()
@@ -70,12 +72,12 @@ namespace DSRemapper.DualShock
         /// Conversion from HidInfo to DualShockInfo
         /// </summary>
         /// <param name="info">HidInfo</param>
-        public static explicit operator DualShockInfo(HidInfo info) => new(info.Path, info.Name, info.Id, info.VendorId, info.ProductId);
+        public static explicit operator DualShockInfo(DeviceInfo info) => new(info);
         /// <summary>
         /// Conversion from DualShockInfo to HidInfo
         /// </summary>
         /// <param name="info">HidInfo</param>
-        public static explicit operator HidInfo(DualShockInfo info) => new(info.Path, info.Name, info.Id, info.VendorId, info.ProductId);
+        public static explicit operator DeviceInfo(DualShockInfo info) => info.Info;
     }
 
     /// <summary>
@@ -88,8 +90,7 @@ namespace DSRemapper.DualShock
         /// </summary>
         public DualShockScanner() { }
         /// <inheritdoc/>
-        public IDSRInputDeviceInfo[] ScanDevices() => HidEnumerator
-            .WmiEnumerateDevices(0x054C)
+        public IDSRInputDeviceInfo[] ScanDevices() => Hid.Enumerate(0x054C)
             .Where(i=> DualShockInfo.DS4ProdId.Contains(i.ProductId) || DualShockInfo.DS5ProdId.Contains(i.ProductId))
             .Select(i => (DualShockInfo)i).ToArray();
     }
@@ -107,7 +108,8 @@ namespace DSRemapper.DualShock
     public class DualShock : IDSRInputController
     {
         private static readonly DSRLogger logger = DSRLogger.GetLogger("DSRemapper.Dualshock");
-        private readonly HidDevice hidDevice;
+        private readonly DeviceInfo devInfo;
+        private Device? hidDevice = null;
 
         private DSRVector3 lastGyro = new();
         private readonly SixAxisProcess motPro = new();
@@ -126,20 +128,14 @@ namespace DSRemapper.DualShock
         /// <param name="info">A DualShockInfo class with the physical controller info</param>
         public DualShock(DualShockInfo info)
         {
-            hidDevice = new((HidInfo)info);
+            devInfo = info.Info;
 
-            if (hidDevice.Capabilities.InputReportByteLength == 64)
-                if (hidDevice.Capabilities.NumberFeatureDataIndices == 22)
-                    conType = DualShockConnection.Dongle;
-                else
-                    conType = DualShockConnection.USB;
-            else
-                conType = DualShockConnection.Bluetooth;
+            conType = devInfo.BusType == BusType.Usb ? DualShockConnection.USB : DualShockConnection.Bluetooth;
 
             logger.LogInformation($"{Name} [{Id}]: Connected using {conType}");
         }
         /// <inheritdoc/>
-        public string Id => hidDevice.Information.Id;
+        public string Id => devInfo.SerialNumber;
 
         /// <inheritdoc/>
         public string Name => "DualShock 4";
@@ -151,7 +147,7 @@ namespace DSRemapper.DualShock
         public string Info { get; private set; } = "Test";
 
         /// <inheritdoc/>
-        public bool IsConnected => hidDevice.IsOpen;
+        public bool IsConnected => hidDevice != null;
 
         /// <inheritdoc/>
         public string ImgPath => "DS4.png";
@@ -159,47 +155,44 @@ namespace DSRemapper.DualShock
         /// <inheritdoc/>
         public void Connect()
         {
-            hidDevice.OpenDevice(false);
+            hidDevice = devInfo.ConnectToDevice();
             if (IsConnected)
             {
                 hidDevice.SetInputBufferCount(3);
 
                 // Log the current report buffer count to ensure that no errors has been occurred.
                 // If report buffer count is bigger than 3 can cause input lag
-                hidDevice.GetInputBufferCount(out int bufCount);
+                int bufCount = hidDevice.GetInputBufferCount();
                 logger.LogInformation($"{Name} [{Id}]: buffer count set to {bufCount}");
 
-                rawReport = new byte[hidDevice.Capabilities.InputReportByteLength];
+                rawReport = new byte[conType == DualShockConnection.Bluetooth ? 78 : 64];
                 GetFeatureReport();
             }
         }
         /// <inheritdoc/>
         public void Disconnect()
         {
-            hidDevice.CancelIO();
-            hidDevice.CloseDevice();
+            hidDevice?.Dispose();
+            hidDevice = null;
         }
         /// <inheritdoc/>
         public void Dispose()
         {
             Disconnect();
-            hidDevice.Dispose();
-            GC.SuppressFinalize(this);
+            //GC.SuppressFinalize(this);
         }
         /// <summary>
         /// Gets the 0x05 feature report of DualShock4 controller, which enables the input report with IMU information
         /// </summary>
         private void GetFeatureReport()
         {
-            byte[] fetRep = new byte[64];
-            fetRep[0] = 0x05;
-            hidDevice.GetFeature(fetRep);
+            hidDevice?.GetFeatureReport(0x05,64);
             //logger.LogDebug($"Output Report Length: {hidDevice.Capabilities.OutputReportByteLength}");
         }
         /// <inheritdoc/>
         public IDSRInputReport GetInputReport()
         {
-            hidDevice.ReadFile(rawReport);
+            hidDevice?.Read(rawReport);
             GCHandle ptr = GCHandle.Alloc(rawReport, GCHandleType.Pinned);
             IDS4InReport strRawReport;
             if (conType == DualShockConnection.USB)
@@ -275,7 +268,7 @@ namespace DSRemapper.DualShock
                 outReport ??= new USBOutReport();
                 outReport.State = outState;
             }
-            hidDevice.WriteFile(outReport.ToArray());
+            hidDevice?.Write(outReport.ToArray());
         }
         private static string FormatByteArray(byte[] data)
         {
@@ -307,8 +300,9 @@ namespace DSRemapper.DualShock
     }
     public class DualSense : IDSRInputController
     {
-        private static readonly DSRLogger logger = DSRLogger.GetLogger("DSRemapper.Dualshock");
-        private readonly HidDevice hidDevice;
+        private static readonly DSRLogger logger = DSRLogger.GetLogger("DSRemapper.Dualsense");
+        private readonly DeviceInfo devInfo;
+        private Device? hidDevice = null;
 
         private DSRVector3 lastGyro = new();
         private readonly SixAxisProcess motPro = new();
@@ -322,20 +316,14 @@ namespace DSRemapper.DualShock
         private readonly DualShockConnection conType;
         public DualSense(DualShockInfo info)
         {
-            hidDevice = new((HidInfo)info);
+            devInfo = info.Info;
 
-            if (hidDevice.Capabilities.InputReportByteLength == 64)
-                if (hidDevice.Capabilities.NumberFeatureDataIndices == 22)
-                    conType = DualShockConnection.Dongle;
-                else
-                    conType = DualShockConnection.USB;
-            else
-                conType = DualShockConnection.Bluetooth;
+            conType = devInfo.BusType == BusType.Usb ? DualShockConnection.USB : DualShockConnection.Bluetooth;
 
             logger.LogInformation($"{Name} [{Id}]: Connected using {conType}");
         }
         /// /// <inheritdoc/>
-        public string Id => Convert.ToHexString(Crc64.Hash(Encoding.ASCII.GetBytes(hidDevice.Information.Path)));
+        public string Id => Convert.ToHexString(Crc64.Hash(Encoding.ASCII.GetBytes(devInfo.Path)));
 
         /// <inheritdoc/>
         public string Name => "DualSense";
@@ -347,25 +335,25 @@ namespace DSRemapper.DualShock
         public string Info { get; private set; } = "Test";
 
         /// <inheritdoc/>
-        public bool IsConnected => hidDevice.IsOpen;
+        public bool IsConnected => hidDevice != null;
 
         /// <inheritdoc/>
         public string ImgPath => "DS5.png";
         /// <inheritdoc/>
         public void Connect()
         {
-            logger.LogInformation($"{Name} [{Id}]: Trying to connect using {conType}");
-            hidDevice.OpenDevice(false);
+            //logger.LogInformation($"{Name} [{Id}]: Trying to connect using {conType}");
+            hidDevice = devInfo.ConnectToDevice();
             if (IsConnected)
             {
                 hidDevice.SetInputBufferCount(3);
 
                 // Log the current report buffer count to ensure that no errors has been occurred.
                 // If report buffer count is bigger than 3 can cause input lag
-                hidDevice.GetInputBufferCount(out int bufCount);
+                int bufCount = hidDevice.GetInputBufferCount();
                 logger.LogInformation($"{Name} [{Id}]: buffer count set to {bufCount}");
 
-                rawReport = new byte[hidDevice.Capabilities.InputReportByteLength];
+                rawReport = new byte[conType == DualShockConnection.Bluetooth ? 78 : 64];
                 GetFeatureReport();
                 InitOutReport();
 
@@ -373,7 +361,7 @@ namespace DSRemapper.DualShock
                 {
                     outReport.Raw.ResetLights = true;
                     outReport.UpdateRaw();
-                    hidDevice.WriteFile(GetBluetoothOutReport());
+                    hidDevice.Write(GetBluetoothOutReport());
                     outReport.Raw.ResetLights = false;
                 }
 
@@ -382,31 +370,28 @@ namespace DSRemapper.DualShock
         /// <inheritdoc/>
         public void Disconnect()
         {
-            hidDevice.CancelIO();
-            hidDevice.CloseDevice();
+            hidDevice?.Dispose();
+            hidDevice = null;
         }
         /// <inheritdoc/>
         public void Dispose()
         {
             Disconnect();
-            hidDevice.Dispose();
-            GC.SuppressFinalize(this);
+            //GC.SuppressFinalize(this);
         }
         /// /// <summary>
         /// Gets the 0x05 feature report of DualShock4 controller, which enables the input report with IMU information
         /// </summary>
         private void GetFeatureReport()
         {
-            byte[] fetRep = new byte[41];
-            fetRep[0] = 0x05;
-            hidDevice.GetFeature(fetRep);
+            hidDevice?.GetFeatureReport(0x05,41);
             //logger.LogDebug($"Output Report Length: {hidDevice.Capabilities.OutputReportByteLength}");
         }
 
         /// /// <inheritdoc/>
         public IDSRInputReport GetInputReport()
         {
-            hidDevice.ReadFile(rawReport);
+            hidDevice?.Read(rawReport);
             GCHandle ptr = GCHandle.Alloc(rawReport, GCHandleType.Pinned);
             InState strRawReport;
             if (conType == DualShockConnection.Bluetooth)
@@ -511,7 +496,7 @@ namespace DSRemapper.DualShock
                 rawOutput = rawReport.ToArray();
             }
             //Console.WriteLine(Convert.ToHexString(rawOutput));
-            hidDevice.WriteFile(rawOutput);
+            hidDevice?.Write(rawOutput);
         }
     }
 }
