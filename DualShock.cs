@@ -85,14 +85,23 @@ namespace DSRemapper.DualShock
     /// </summary>
     public class DualShockScanner : IDSRDeviceScanner
     {
+        static DualShockScanner()
+        {
+            Hid.Init();
+        }
         /// <summary>
         /// DualShockScanner class constructor
         /// </summary>
         public DualShockScanner() { }
         /// <inheritdoc/>
         public IDSRInputDeviceInfo[] ScanDevices() => Hid.Enumerate(0x054C)
-            .Where(i=> DualShockInfo.DS4ProdId.Contains(i.ProductId) || DualShockInfo.DS5ProdId.Contains(i.ProductId))
+            .Where(i => DualShockInfo.DS4ProdId.Contains(i.ProductId) || DualShockInfo.DS5ProdId.Contains(i.ProductId))
             .Select(i => (DualShockInfo)i).ToArray();
+        /// <inheritdoc/>
+        public static void PluginFree()
+        {
+            Hid.Exit();
+        }
     }
 
     internal enum DualShockConnection : byte
