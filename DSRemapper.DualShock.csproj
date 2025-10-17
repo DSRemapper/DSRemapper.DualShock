@@ -49,7 +49,7 @@
   </ItemGroup>
 
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="..\DSRPackager -w -p $(OutputPath) -o &quot;..\ZipPlugins\$(ProjectName) v$(Version).dsrp&quot;" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+		<Exec Command="..\DSRPackager -w -p $(OutputPath) -o &quot;..\ZipPlugins\$(ProjectName) v$(Version).dsrp&quot;" />
 	</Target>
 
 </Project>

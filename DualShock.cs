@@ -400,24 +400,20 @@ namespace DSRemapper.DualShock
         /// /// <inheritdoc/>
         public IDSRInputReport GetInputReport()
         {
-            hidDevice?.Read(rawReport);
+            if (hidDevice == null)
+                return report;
+            rawReport = [..hidDevice.GetInputReport((byte)(conType == DualShockConnection.Bluetooth ? 0x31 : 0x01), rawReport.Length)];
             GCHandle ptr = GCHandle.Alloc(rawReport, GCHandleType.Pinned);
             InState strRawReport;
             if (conType == DualShockConnection.Bluetooth)
-            {
                 strRawReport = Marshal.PtrToStructure<BTReport>(ptr.AddrOfPinnedObject()).State;
-            }
             else
-            {
                 strRawReport = Marshal.PtrToStructure<USBReport>(ptr.AddrOfPinnedObject()).State;
-            }
             ptr.Free();
-            /*if(strRawReport.ReportId != 19)
-                return report;*/
 
             report.Set(strRawReport);
 
-            DSRVector3 temp = (report.Gyro - lastGyro);
+            DSRVector3 temp = report.Gyro - lastGyro;
             if (temp.Length < 1f)
                 gyroAvg.Update(report.Gyro, 200);
             lastGyro = report.Gyro;
