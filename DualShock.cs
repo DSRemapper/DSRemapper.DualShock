@@ -30,15 +30,15 @@ namespace DSRemapper.DualShock
     /// <param name="id">Device unique id</param>
     /// <param name="vendorId">Device vendor id</param>
     /// <param name="productId">Device product id</param>
-    public class DualShockInfo(DeviceInfo info) : IDSRInputDeviceInfo
+    public class DualShockInfo : IDSRInputDeviceInfo
     {
-        internal DeviceInfo Info { get; private set; } = info;
+        internal DeviceInfo Info { get; private set; }
         /// <summary>
         /// Hid Device path of the DualShock controller
         /// </summary>
         public string Path => Info.Path;
         /// <inheritdoc/>
-        public string Id => Info.SerialNumber;
+        public string Id { get; private set; }
         /// <inheritdoc/>
         public string Name => Info.ProductString;
         /// <summary>
@@ -53,19 +53,36 @@ namespace DSRemapper.DualShock
         internal static readonly List<int> DS4ProdId = [0x05C4, 0x09CC, 0x0BA0, 0x0BA1];
         internal static readonly List<int> DS5ProdId = [0x0CE6, 0x0DF2];
 
+        public DualShockInfo(DeviceInfo info)
+        {
+            Info = info;
+            Id = GetMac();
+        }
+
         /// <inheritdoc/>
         public IDSRInputController CreateController()
         {
             //Console.WriteLine(Path);
-            if (DS4ProdId.Contains(ProductId))
-                return new DualShock(this);
+            if (DS5ProdId.Contains(ProductId))
+                return new DualSense(this, Id);
             else
-                return new DualSense(this);
+                return new DualShock(this, Id);
         }
         /// <inheritdoc/>
         public override string ToString()
         {
             return $"Device {Name} [{Id}] [{VendorId:X4}][{ProductId:X4}]";
+        }
+        private string GetMac()
+        {
+            var dev = Info.ConnectToDevice();
+            byte[] rawmac = [];
+            if (Info.BusType != BusType.Bluetooth && DS4ProdId.Contains(Info.ProductId))
+                rawmac = [.. dev.GetFeatureReport(0x12, 20)[1..7]];
+            else
+                rawmac = [.. dev.GetFeatureReport(0x09, 20)[1..7]];
+            dev.Dispose();
+            return string.Join(":",rawmac.Select(b=> $"{b:X2}").Reverse());
         }
 
         /// <summary>
@@ -135,8 +152,10 @@ namespace DSRemapper.DualShock
         /// DualShock controller class constructor
         /// </summary>
         /// <param name="info">A DualShockInfo class with the physical controller info</param>
-        public DualShock(DualShockInfo info)
+        /// <param name="id">The serial number of the controller</param>
+        public DualShock(DualShockInfo info, string id = "00:00:00:00:00:00")
         {
+            Id = id;
             devInfo = info.Info;
 
             conType = devInfo.BusType == BusType.Usb ? DualShockConnection.USB : DualShockConnection.Bluetooth;
@@ -144,7 +163,7 @@ namespace DSRemapper.DualShock
             logger.LogInformation($"{Name} [{Id}]: Connected using {conType}");
         }
         /// <inheritdoc/>
-        public string Id => devInfo.SerialNumber;
+        public string Id { get; private set; }
 
         /// <inheritdoc/>
         public string Name => "DualShock 4";
@@ -201,7 +220,14 @@ namespace DSRemapper.DualShock
         /// <inheritdoc/>
         public IDSRInputReport GetInputReport()
         {
-            hidDevice?.Read(rawReport);
+            try
+            {
+                hidDevice?.Read(rawReport);
+            }
+            catch (HidException)
+            {
+                return report;
+            }
             GCHandle ptr = GCHandle.Alloc(rawReport, GCHandleType.Pinned);
             IDS4InReport strRawReport;
             if (conType == DualShockConnection.USB)
@@ -277,7 +303,11 @@ namespace DSRemapper.DualShock
                 outReport ??= new USBOutReport();
                 outReport.State = outState;
             }
-            hidDevice?.Write(outReport.ToArray());
+            try
+            {
+                hidDevice?.Write(outReport.ToArray());
+            }
+            catch (HidException) { }
         }
         private static string FormatByteArray(byte[] data)
         {
@@ -323,8 +353,14 @@ namespace DSRemapper.DualShock
         private byte[] rawReport = [];
         private readonly DualSenseInputReport report = new();
         private readonly DualShockConnection conType;
-        public DualSense(DualShockInfo info)
+        /// ///<summary>
+        /// DualSense controller class constructor
+        /// </summary>
+        /// <param name="info">A DualShockInfo class with the physical controller info</param>
+        /// <param name="id">The serial number of the controller</param>
+        public DualSense(DualShockInfo info, string id = "00:00:00:00:00:00")
         {
+            Id = id;
             devInfo = info.Info;
 
             conType = devInfo.BusType == BusType.Usb ? DualShockConnection.USB : DualShockConnection.Bluetooth;
@@ -332,7 +368,7 @@ namespace DSRemapper.DualShock
             logger.LogInformation($"{Name} [{Id}]: Connected using {conType}");
         }
         /// /// <inheritdoc/>
-        public string Id => Convert.ToHexString(Crc64.Hash(Encoding.ASCII.GetBytes(devInfo.Path)));
+        public string Id { get; private set; }
 
         /// <inheritdoc/>
         public string Name => "DualSense";
@@ -382,6 +418,20 @@ namespace DSRemapper.DualShock
             hidDevice?.Dispose();
             hidDevice = null;
         }
+        /// <summary>
+        /// Disconnects the controller from bluetooth if it is connected to it.
+        /// </summary>
+        [CustomMethod("Disconnect BT")]
+        public void DisconnectBT()
+        {
+            if (conType == DualShockConnection.Bluetooth && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                byte[] btAddr = new byte[8];
+                Convert.FromHexString(Id.Replace(":", "")).CopyTo(btAddr, 0);
+                Array.Reverse(btAddr, 0, 6);
+                BTHandle.DisconnectBT(BitConverter.ToInt64(btAddr, 0));
+            }
+        }
         /// <inheritdoc/>
         public void Dispose()
         {
@@ -402,7 +452,14 @@ namespace DSRemapper.DualShock
         {
             if (hidDevice == null)
                 return report;
-            rawReport = [..hidDevice.GetInputReport((byte)(conType == DualShockConnection.Bluetooth ? 0x31 : 0x01), rawReport.Length)];
+            try
+            {
+                rawReport = [.. conType == DualShockConnection.Bluetooth ? hidDevice.GetInputReport(0x31, 78) : hidDevice.Read(64)];
+            }
+            catch (HidException)
+            {
+                return report;
+            }
             GCHandle ptr = GCHandle.Alloc(rawReport, GCHandleType.Pinned);
             InState strRawReport;
             if (conType == DualShockConnection.Bluetooth)
@@ -501,7 +558,10 @@ namespace DSRemapper.DualShock
                 rawOutput = rawReport.ToArray();
             }
             //Console.WriteLine(Convert.ToHexString(rawOutput));
-            hidDevice?.Write(rawOutput);
+            try{
+                hidDevice?.Write(rawOutput);
+            }
+            catch (HidException) { }
         }
     }
 }

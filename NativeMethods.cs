@@ -28,6 +28,7 @@ namespace DSRemapper.DualShock
             logger.LogWarning("No pointer found");
             return IntPtr.Zero;
         }
+
         internal static int GetInputBufferCount(this Device device)
         {
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -56,11 +57,71 @@ namespace DSRemapper.DualShock
             return true;
         }
     }
-    internal static class NativeMethods
+    internal static class BTHandle
     {
-        [DllImport("hid.dll")]
-        static internal extern bool HidD_GetNumInputBuffers(IntPtr hidDeviceObject, ref int numberBuffers);
-        [DllImport("hid.dll")]
-        static internal extern bool HidD_SetNumInputBuffers(IntPtr hidDeviceObject, int numberBuffers);
+        public static bool DisconnectBT(long mac)
+        {
+            IntPtr btHandle = IntPtr.Zero;
+            uint IOCTL_BTH_DISCONNECT_DEVICE = 0x41000C;
+
+            NativeMethods.BLUETOOTH_FIND_RADIO_PARAMS p = new();
+            p.dwSize = Marshal.SizeOf(typeof(NativeMethods.BLUETOOTH_FIND_RADIO_PARAMS));
+            IntPtr searchHandle = NativeMethods.BluetoothFindFirstRadio(ref p, ref btHandle);
+            int bytesReturned = 0;
+
+            bool success = false;
+
+            while (!success && btHandle != IntPtr.Zero)
+            {
+                Console.WriteLine("Disconnecting");
+                success = NativeMethods.DeviceIoControl(btHandle, IOCTL_BTH_DISCONNECT_DEVICE, ref mac, 8, IntPtr.Zero, 0, ref bytesReturned, IntPtr.Zero);
+                NativeMethods.CloseHandle(btHandle);
+                if (!success)
+                {
+                    if (!NativeMethods.BluetoothFindNextRadio(searchHandle, ref btHandle))
+                        btHandle = IntPtr.Zero;
+                }
+            }
+
+            NativeMethods.BluetoothFindRadioClose(searchHandle);
+            return success;
+        }
+    }
+    internal static partial class NativeMethods
+    {
+        [LibraryImport("hid.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool HidD_GetNumInputBuffers(IntPtr hidDeviceObject, ref int numberBuffers);
+        [LibraryImport("hid.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool HidD_SetNumInputBuffers(IntPtr hidDeviceObject, int numberBuffers);
+
+        [StructLayout(LayoutKind.Sequential)]
+        internal struct BLUETOOTH_FIND_RADIO_PARAMS
+        {
+            [MarshalAs(UnmanagedType.U4)]
+            public int dwSize;
+        }
+        [LibraryImport("bthprops.cpl")]
+        internal static partial IntPtr BluetoothFindFirstRadio(ref BLUETOOTH_FIND_RADIO_PARAMS pbtfrp, ref IntPtr phRadio);
+        [LibraryImport("bthprops.cpl")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool BluetoothFindNextRadio(IntPtr hFind, ref IntPtr phRadio);
+
+        [LibraryImport("bthprops.cpl")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool BluetoothFindRadioClose(IntPtr hFind);
+
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool DeviceIoControl(IntPtr DeviceHandle, uint IoControlCode, ref long InBuffer, int InBufferSize, IntPtr OutBuffer, int OutBufferSize, ref int BytesReturned, IntPtr Overlapped);
+
+        [LibraryImport("kernel32.dll", EntryPoint = "DeviceIoControl", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool DeviceIoControl(IntPtr DeviceHandle, uint IoControlCode, IntPtr InBuffer, int InBufferSize, IntPtr OutBuffer, int OutBufferSize, ref int BytesReturned, IntPtr Overlapped);
+
+        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        internal static partial bool CloseHandle(IntPtr hObject);
     }
 }
