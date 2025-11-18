@@ -362,8 +362,11 @@ namespace DSRemapper.DualShock
         {
             Id = id;
             devInfo = info.Info;
-
-            conType = devInfo.BusType == BusType.Usb ? DualShockConnection.USB : DualShockConnection.Bluetooth;
+            
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                conType = devInfo.InterfaceNumber >= 0 ? DualShockConnection.USB : DualShockConnection.Bluetooth;
+            else
+                conType = devInfo.BusType == BusType.Usb ? DualShockConnection.USB : DualShockConnection.Bluetooth;
 
             logger.LogInformation($"{Name} [{Id}]: Connected using {conType}");
         }
