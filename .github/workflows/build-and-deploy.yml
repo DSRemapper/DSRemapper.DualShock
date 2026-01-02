@@ -70,7 +70,7 @@ jobs:
           DSR_GPG_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           DSR_GPG_PASS: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          ./${{ env.DSRPACKAGER_EXE }} -p "./build/win-x64/${{ env.PLUGIN_NAME }}.dll" \
+          ./${{ env.DSRPACKAGER_EXE }} -p "./build/${{ env.PLUGIN_NAME }}.dll" \
             -n "${{ env.PLUGIN_NAME }}" \
             -d "${{ env.PLUGIN_DESC }}" \
             -o "./${{ env.PLUGIN_NAME }}.zip" \
