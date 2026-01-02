@@ -25,11 +25,6 @@ namespace DSRemapper.DualShock
     /// <summary>
     /// DualShock info class
     /// </summary>
-    /// <param name="path">Hid Device path</param>
-    /// <param name="name">Device name</param>
-    /// <param name="id">Device unique id</param>
-    /// <param name="vendorId">Device vendor id</param>
-    /// <param name="productId">Device product id</param>
     public class DualShockInfo : IDSRInputDeviceInfo
     {
         internal DeviceInfo Info { get; private set; }
@@ -53,6 +48,10 @@ namespace DSRemapper.DualShock
         internal static readonly List<int> DS4ProdId = [0x05C4, 0x09CC, 0x0BA0, 0x0BA1];
         internal static readonly List<int> DS5ProdId = [0x0CE6, 0x0DF2];
 
+        /// <summary>
+        /// Constructure of the <see cref="DualShockInfo"/> class
+        /// </summary>
+        /// <param name="info">The hid device info struct that defines the device</param>
         public DualShockInfo(DeviceInfo info)
         {
             Info = info;
@@ -337,6 +336,10 @@ namespace DSRemapper.DualShock
         private static float AxisToFloat(sbyte axis) => axis / (axis < 0 ? 128f : 127f);
         private static float AxisToFloat(byte axis) => axis / 255f;
     }
+    /// 
+    /// <summary>
+    /// DualSense controller class
+    /// </summary>
     public class DualSense : IDSRInputController
     {
         private static readonly DSRLogger logger = DSRLogger.GetLogger("DSRemapper.Dualsense");

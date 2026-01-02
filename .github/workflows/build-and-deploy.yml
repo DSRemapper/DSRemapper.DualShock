@@ -1,0 +1,110 @@
+name: Build and Release Package
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+-beta*'
+      - 'v[0-9]+.[0-9]+.[0-9]+-alpha*'
+
+env:
+  IS_CI_BUILD: true
+  DSRPACKAGER_EXE: 'DSRPackager'
+  ZIPPER_FOLDER_NAME: './'
+  PLUGIN_NAME: "DSRemapper.DualShock"
+  PLUGIN_DESC: "Official plugin for the DualShock 4 (PS4) and DualSense (PS5) controllers"
+
+jobs:
+  build-and-pack:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Checkout Pages Branch
+        uses: actions/checkout@v4
+        with:
+          ref: 'gh-pages'
+          path: 'pages-content'
+
+      - name: Prepare Manifest for Update
+        run: |
+          [ -f "./pages-content/manifest.json" ] && cp ./pages-content/manifest.json ./manifest.json -f || echo "No manifest.json found in distribution branch, skipping copy."
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Extract Versions
+        id: version_extract
+        run: |
+          FULL_VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')
+          BASE_VERSION=$(echo "$FULL_VERSION" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+')
+          echo "FULL_VERSION=$FULL_VERSION" >> $GITHUB_OUTPUT
+          echo "BASE_VERSION=$BASE_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download Custom Zipper
+        uses: robinraju/release-downloader@v1.9
+        with:
+          repository: 'DSRemapper/DSRPackager'
+          latest: true
+          fileName: ${{ env.DSRPACKAGER_EXE }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          out-file-path: ${{ env.ZIPPER_FOLDER_NAME }}
+
+      - name: Make Zipper Executable
+        run: chmod +x ./${{ env.DSRPACKAGER_EXE }}
+
+      - name: Build Windows
+        run: |
+          dotnet build -c Release -o "./build" -p:PackageVersion=${{ steps.version_extract.outputs.FULL_VERSION }} -p:AssemblyVersion=${{ steps.version_extract.outputs.BASE_VERSION }} -p:FileVersion=${{ steps.version_extract.outputs.BASE_VERSION }}
+
+      - name: Package Plugin
+        env:
+          DSR_GPG_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          DSR_GPG_PASS: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          ./${{ env.DSRPACKAGER_EXE }} -p "./build/win-x64/${{ env.PLUGIN_NAME }}.dll" \
+            -n "${{ env.PLUGIN_NAME }}" \
+            -d "${{ env.PLUGIN_DESC }}" \
+            -o "./${{ env.PLUGIN_NAME }}.zip" \
+            -l "win:https://github.com/DSRemapper/DSRemapper.DualShock/releases/download/${{ github.ref_name }}/${{ env.PLUGIN_NAME }}.zip" \
+            -s
+
+      - name: Verify DSRPackager output
+        run: |
+          if [ ! -f "./${{ env.PLUGIN_NAME }}.zip" ]; then
+            echo "::error::Package was not created! Check the logs for Access Denied errors."
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true 
+          files: |
+            ./${{ env.PLUGIN_NAME }}.zip
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') }}
+      
+      - name: Sync Updated Manifest
+        run: |
+          cp ./manifest.json ./pages-content/manifest.json -f
+          cp ./manifest.json.asc ./pages-content/manifest.json.asc -f
+
+      - name: Commit and Push to Distribution
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          repository: ./pages-content
+          branch: gh-pages
+          commit_message: "update manifest for ${{ steps.version_extract.outputs.FULL_VERSION }}"
+          file_pattern: 'manifest.json manifest.json.asc'
+          commit_user_name: github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com
