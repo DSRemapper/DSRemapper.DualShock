@@ -74,7 +74,7 @@ jobs:
             -n "${{ env.PLUGIN_NAME }}" \
             -d "${{ env.PLUGIN_DESC }}" \
             -o "./${{ env.PLUGIN_NAME }}.zip" \
-            -l "win:https://github.com/DSRemapper/DSRemapper.DualShock/releases/download/${{ github.ref_name }}/${{ env.PLUGIN_NAME }}.zip" \
+            -l "all:https://github.com/DSRemapper/DSRemapper.DualShock/releases/download/${{ github.ref_name }}/${{ env.PLUGIN_NAME }}.zip" \
             -s
 
       - name: Verify DSRPackager output
