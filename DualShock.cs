@@ -19,8 +19,7 @@ using System.Collections.Generic;
 namespace DSRemapper.DualShock
 {
     /*
-     * Dualshock vendor id: 054C
-     * Dualshock product id: 09CC (of my dualshock at least)
+     * Sony vendor id: 054C
      */
     /// <summary>
     /// DualShock info class
@@ -39,14 +38,15 @@ namespace DSRemapper.DualShock
         /// <summary>
         /// Hid Device vendor id of the DualShock controller
         /// </summary>
-        public int VendorId => Info.VendorId;
+        public ushort VendorId => Info.VendorId;
         /// <summary>
         /// Hid Device product id of the DualShock controller
         /// </summary>
-        public int ProductId => Info.ProductId;
+        public ushort ProductId => Info.ProductId;
 
-        internal static readonly List<int> DS4ProdId = [0x05C4, 0x09CC, 0x0BA0, 0x0BA1];
-        internal static readonly List<int> DS5ProdId = [0x0CE6, 0x0DF2];
+        internal const ushort SonyVendorId = 0x054C;
+        internal static readonly List<ushort> DS4ProdId = [0x05C4, 0x09CC, 0x0BA0, 0x0BA1];
+        internal static readonly List<ushort> DS5ProdId = [0x0CE6, 0x0DF2];
 
         /// <summary>
         /// Constructure of the <see cref="DualShockInfo"/> class
@@ -81,7 +81,9 @@ namespace DSRemapper.DualShock
             else
                 rawmac = [.. dev.GetFeatureReport(0x09, 20)[1..7]];
             dev.Dispose();
-            return string.Join(":",rawmac.Select(b=> $"{b:X2}").Reverse());
+            string strMac = string.Join(":",rawmac.Select(b=> $"{b:X2}").Reverse());
+            //DSRLogger.StaticLogInformation($"{Info.Path} | {Info.InterfaceNumber} | {Info.ReleaseNumber} | {Info.SerialNumber} | {strMac}");
+            return strMac;
         }
 
         /// <summary>
@@ -101,17 +103,23 @@ namespace DSRemapper.DualShock
     /// </summary>
     public class DualShockScanner : IDSRDeviceScanner
     {
+        private const short PluginPriority = 1000;
         static DualShockScanner()
         {
             Hid.Init();
+
+            foreach(ushort product in (ushort[])[..DualShockInfo.DS4ProdId, ..DualShockInfo.DS5ProdId] )
+                UDManager.RegisterProduct(DualShockInfo.SonyVendorId, product, PluginPriority);
         }
         /// <summary>
         /// DualShockScanner class constructor
         /// </summary>
         public DualShockScanner() { }
         /// <inheritdoc/>
-        public IDSRInputDeviceInfo[] ScanDevices() => Hid.Enumerate(0x054C)
-            .Where(i => DualShockInfo.DS4ProdId.Contains(i.ProductId) || DualShockInfo.DS5ProdId.Contains(i.ProductId))
+        public IDSRInputDeviceInfo[] ScanDevices() => Hid.Enumerate(DualShockInfo.SonyVendorId)
+            .Where(i => (DualShockInfo.DS4ProdId.Contains(i.ProductId) ||
+                DualShockInfo.DS5ProdId.Contains(i.ProductId)) &&
+                UDManager.CheckPriority(DualShockInfo.SonyVendorId, i.ProductId, PluginPriority))
             .Select(i => (DualShockInfo)i).ToArray();
         /// <inheritdoc/>
         public static void PluginFree()
@@ -144,7 +152,7 @@ namespace DSRemapper.DualShock
         private IDS4OutReport? outReport = null;
         private Crc32 outCRC = new();
         private byte[] rawReport = [];
-        private readonly DualShockInputReport report = new();
+        private readonly DualShockInputReport report;
         private readonly DualShockConnection conType;
 
         ///<summary>
@@ -159,6 +167,21 @@ namespace DSRemapper.DualShock
 
             conType = devInfo.BusType == BusType.Usb ? DualShockConnection.USB : DualShockConnection.Bluetooth;
 
+            report = new(conType == DualShockConnection.Bluetooth
+                ? new DSRemapper.DualShock.BTStatus()
+                {
+                    ReportId = 0,
+                    Basic = new(),
+                    Extended = new(),
+                    Touches = [new(), new(), new(), new()],
+                }
+                : new DSRemapper.DualShock.USBStatus()
+                {
+                    ReportId = 0,
+                    Basic = new(),
+                    Extended = new(),
+                    Touches = [new(), new(), new()],
+                });
             logger.LogInformation($"{Name} [{Id}]: Connected using {conType}");
         }
         /// <inheritdoc/>
@@ -202,18 +225,34 @@ namespace DSRemapper.DualShock
             hidDevice?.Dispose();
             hidDevice = null;
         }
+        /// <summary>
+        /// Disconnects the controller from bluetooth if it is connected to it.
+        /// </summary>
+        [CustomMethod("Disconnect BT")]
+        public void DisconnectBT()
+        {
+            if (conType == DualShockConnection.Bluetooth && RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                byte[] btAddr = new byte[8];
+                Convert.FromHexString(Id.Replace(":", "")).CopyTo(btAddr, 0);
+                Array.Reverse(btAddr, 0, 6);
+                BTHandle.DisconnectBT(BitConverter.ToInt64(btAddr, 0));
+            }
+        }
         /// <inheritdoc/>
         public void Dispose()
         {
             Disconnect();
-            //GC.SuppressFinalize(this);
         }
         /// <summary>
         /// Gets the 0x05 feature report of DualShock4 controller, which enables the input report with IMU information
         /// </summary>
         private void GetFeatureReport()
         {
-            hidDevice?.GetFeatureReport(0x05,64);
+            if (conType == DualShockConnection.Bluetooth)
+                hidDevice?.GetFeatureReport(0x05,64);
+            else
+                hidDevice?.GetFeatureReport(0x02,64);
             //logger.LogDebug($"Output Report Length: {hidDevice.Capabilities.OutputReportByteLength}");
         }
         /// <inheritdoc/>
@@ -336,7 +375,6 @@ namespace DSRemapper.DualShock
         private static float AxisToFloat(sbyte axis) => axis / (axis < 0 ? 128f : 127f);
         private static float AxisToFloat(byte axis) => axis / 255f;
     }
-    /// 
     /// <summary>
     /// DualSense controller class
     /// </summary>
@@ -373,7 +411,7 @@ namespace DSRemapper.DualShock
 
             logger.LogInformation($"{Name} [{Id}]: Connected using {conType}");
         }
-        /// /// <inheritdoc/>
+        /// <inheritdoc/>
         public string Id { get; private set; }
 
         /// <inheritdoc/>
@@ -442,7 +480,6 @@ namespace DSRemapper.DualShock
         public void Dispose()
         {
             Disconnect();
-            //GC.SuppressFinalize(this);
         }
         /// /// <summary>
         /// Gets the 0x05 feature report of DualShock4 controller, which enables the input report with IMU information

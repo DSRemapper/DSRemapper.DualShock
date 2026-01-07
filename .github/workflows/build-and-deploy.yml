@@ -12,7 +12,7 @@ env:
   DSRPACKAGER_EXE: 'DSRPackager'
   ZIPPER_FOLDER_NAME: './'
   PLUGIN_NAME: "DSRemapper.DualShock"
-  PLUGIN_DESC: "Official plugin for the DualShock 4 (PS4) and DualSense (PS5) controllers"
+  PLUGIN_DESC: "Official plugin for the DualShock 4 (PS4) and DualSense (PS5) controllers."
 
 jobs:
   build-and-pack:

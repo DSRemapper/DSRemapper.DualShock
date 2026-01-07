@@ -18,26 +18,20 @@
 	  <RepositoryType>git</RepositoryType>
 	  <PackageProjectUrl>https://github.com/Oscar-Wohlfarhrt/DSRemapper</PackageProjectUrl>
 	  <RepositoryUrl>https://github.com/Oscar-Wohlfarhrt/DSRemapper</RepositoryUrl>
-	  <AssemblyVersion>0.3.1</AssemblyVersion>
+	  <AssemblyVersion>0.3.2</AssemblyVersion>
 	  <FileVersion>$(AssemblyVersion)</FileVersion>
-	  <Version>$(AssemblyVersion)-beta</Version>
+	  <Version>$(AssemblyVersion)</Version>
 	  <GenerateDocumentationFile>True</GenerateDocumentationFile>
 	  <Platforms>AnyCPU;x64</Platforms>
     <DefaultItemExcludes>$(DefaultItemExcludes);DualShockStructs\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DSRemapper.Core" Version="0.4.9" ExcludeAssets="runtime" PrivateAssets="All" />
+    <PackageReference Include="DSRemapper.Core" Version="0.5.0" ExcludeAssets="runtime" PrivateAssets="All" />
 	  <PackageReference Include="HidApi.Net" Version="1.2.0" />
     <PackageReference Include="System.IO.Hashing" Version="8.0.0" />
     <PackageReference Include="System.Management" Version="8.0.0" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include=".\DualShockStructs\DSRemapper.DualShockStructs.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
     <None Update="DS4.png">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
@@ -50,8 +44,8 @@
   </ItemGroup>
 
 	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
-		<Exec Command="..\DSRPackager -w -n &quot;DSRemapper DualShock Plugin&quot; -p $(OutputPath)\DSRemapper.DualShock.dll -o &quot;..\ZipPlugins\$(ProjectName) v$(Version).dsrp&quot;" Condition="'$(IS_CI_BUILD)' != 'true'" />
-    <Exec Command=".\DSRPackager -w -n &quot;DSRemapper DualShock Plugin&quot; -p .\build\DSRemapper.DualShock.dll -o &quot;.\$(ProjectName) v$(Version).dsrp&quot;" Condition="'$(IS_CI_BUILD)' == 'true'" />
+		<Exec Command="..\DSRPackager -w -n &quot;$(ProjectName)&quot; -p $(OutputPath)\$(ProjectName).dll -o &quot;..\ZipPlugins\$(ProjectName) v$(Version).dsrp&quot;" Condition="'$(IS_CI_BUILD)' != 'true'"/>
+    <!--<Exec Command=".\DSRPackager -w -n &quot;DSRemapper DualShock Plugin&quot; -p .\build\DSRemapper.DualShock.dll -o &quot;.\$(ProjectName) v$(Version).dsrp&quot;" Condition="'$(IS_CI_BUILD)' == 'true'" />-->
 	</Target>
   <!--
   run: dotnet build -c Release -o "./build"
