@@ -74,14 +74,23 @@ namespace DSRemapper.DualShock
         }
         private string GetMac()
         {
-            var dev = Info.ConnectToDevice();
-            byte[] rawmac = [];
-            if (Info.BusType != BusType.Bluetooth && DS4ProdId.Contains(Info.ProductId))
-                rawmac = [.. dev.GetFeatureReport(0x12, 20)[1..7]];
+            string strMac = "";
+            if (string.IsNullOrWhiteSpace(Info.SerialNumber) && Info.SerialNumber.Length != 12){
+                var dev = Info.ConnectToDevice();
+                byte[] rawmac = [];
+                
+                if (Info.BusType != BusType.Bluetooth && DS4ProdId.Contains(Info.ProductId))
+                    rawmac = [.. dev.GetFeatureReport(0x12, 20)[1..7]];
+                else
+                    rawmac = [.. dev.GetFeatureReport(0x09, 20)[1..7]];
+                dev.Dispose();
+                strMac = string.Join(":",rawmac.Select(b=> $"{b:X2}").Reverse());
+            }
             else
-                rawmac = [.. dev.GetFeatureReport(0x09, 20)[1..7]];
-            dev.Dispose();
-            string strMac = string.Join(":",rawmac.Select(b=> $"{b:X2}").Reverse());
+            {
+                ReadOnlySpan<char> rawmac = Info.SerialNumber.AsSpan();
+                strMac = $"{rawmac[0..2]}:{rawmac[2..4]}:{rawmac[4..6]}:{rawmac[6..8]}:{rawmac[8..10]}:{rawmac[10..12]}".ToUpper();
+            }
             //DSRLogger.StaticLogInformation($"{Info.Path} | {Info.InterfaceNumber} | {Info.ReleaseNumber} | {Info.SerialNumber} | {strMac}");
             return strMac;
         }
